@@ -63,6 +63,9 @@ public class TestNetFramwork {
 
 		int port = 8888;
 
+		/**
+		 * Create a simple server that will echo all commands back to the client.
+		 */
 		Server svr = new Server(port,"EchoServer");
 
 		svr.setConnectionFactory(new IConnectionFactory() {
@@ -149,6 +152,10 @@ public class TestNetFramwork {
 				"test2"
 		};
 
+		/**
+		 * Create s simple client that will send commands to the server and 
+		 * validate the response.
+		 */
 		try(CommandClient client = new CommandClient("localhost",port)){
 			TestCase.assertTrue("Can't connect to echo server",client.connect());
 			for (int idx = 0; idx < msgs.length; idx++) {
