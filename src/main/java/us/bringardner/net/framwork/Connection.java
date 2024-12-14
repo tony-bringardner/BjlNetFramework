@@ -60,7 +60,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 	private boolean secure;
 	private volatile SocketFactory socketFactory;
 	private int outBufSize = 1024*10;
-	private SSLSocket sslSocket;
+	private volatile SSLSocket sslSocket;
 	private boolean useCRLF=true;
 	
 	

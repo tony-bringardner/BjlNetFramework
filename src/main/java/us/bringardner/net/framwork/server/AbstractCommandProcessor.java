@@ -89,7 +89,7 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 					logDebug("read null??? EOF reached? Connection must be closed by client or network stack error.");
 					stop();
 				} else {
-					logDebug("receved line="+line);
+					logDebug("Received line="+line);
 					IRequestContext context = getRequestContextFactory()
 							.getRequestContext(line);
 					

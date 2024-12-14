@@ -4,7 +4,6 @@
 	<modelVersion>4.0.0</modelVersion>
 	<version>0.1.0</version>
 	<groupId>us.bringardner</groupId>
-
 	<artifactId>bjl_network_framework</artifactId>
 	<name>Network Framework</name>
 	<description>A framework for implementating network protocols (FTP, SMTP, POP3, ...)</description>
