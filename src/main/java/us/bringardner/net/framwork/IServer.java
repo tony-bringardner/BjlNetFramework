@@ -62,7 +62,7 @@ public interface IServer extends IManagedThread {
 	public IProcessor getProcessor() throws InstantiationException, IllegalAccessException;
 	
 	public void setServerSocketFactory(ServerSocketFactory factory);
-	public ServerSocketFactory getServerSocketFactory();
+	public ServerSocketFactory getServerSocketFactory() throws IOException;
 			
 	public void setAcceptTimeout(int milliSeconds);
 	public int getAcceptTimeout();

@@ -27,17 +27,11 @@ package us.bringardner.net.framwork.server;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.security.KeyManagementException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -69,32 +63,32 @@ public class Server extends AbstractCoreServer implements IServer {
 	public static final long DEFAULT_MAX_IDEL_CONNECTION = 1000*60*60*24;
 	//  Default admin freq = 5min
 	private static final long DEFAULT_ADMIN_REFQ = 1000*60*5;
-	
+
 	private static int defaultAcceptTimeout = DEFAULT_ACCEPT_TIMEOUT;
 	private static int defaultConnectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
 	private static Level defaultLogLevel = Level.NONE;
-	
+
 	private int bufferSize =DEFAULT_BUFFER_SIZE;
 	private int port;
 	private boolean secure = false;
 	private volatile ServerSocketFactory serverSocketFactory;
 	private IProcessorFactory processorFactory;
-	
+
 	private IConnectionFactory connectionFactory;
 	private int acceptTimeout     = getDefaultAcceptTimeout();
 	private long maxIdleConnection = DEFAULT_MAX_IDEL_CONNECTION;
 	private long adminFreq = DEFAULT_ADMIN_REFQ;
 	private long lastAdmin=0;
-	
+
 	private Map<String,Object> runtimeValues = new HashMap<String, Object>();
 	private Map<Socket, IProcessor> activeClients = new WeakHashMap<Socket, IProcessor>();
 	private ServerSocket svr = null;
 	private boolean debug;
 	private IAccessControlList acl;
 	private String serverGreating;
-	 
-	 
-	 
+
+
+
 	public static Level getDefaultLogLevel() {
 		return defaultLogLevel;
 	}
@@ -116,7 +110,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		this.port = svr.getLocalPort();
 		setName(name);
 	}
-		
+
 	public Server() {
 		getLogger().setLevel(defaultLogLevel);
 	}
@@ -124,7 +118,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		this();
 		setPort(port);
 	}
-	
+
 
 	public Server(int port, String name) {
 		this(port);
@@ -132,7 +126,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 
-	
+
 	public static int getDefaultAcceptTimeout() {
 		return defaultAcceptTimeout;
 	}
@@ -151,48 +145,48 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	public  SocketFactory getSocketFactory(boolean isSecure) {
 		SocketFactory ret = null;
-		
+
 		if (isSecure) {
-		    try {
+			try {
 				// set up key manager to do server authentication
 				SSLContext ctx=getSSLContext();
 				if( ctx != null ) {
 					ret = ctx.getSocketFactory();
 				}
-				
+
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		} else {
-		    ret =  SocketFactory.getDefault();
+			ret =  SocketFactory.getDefault();
 		}
-		
+
 		return ret;
-		
+
 	}
 
-	public SSLContext getSSLContext() throws CertificateException, FileNotFoundException, IOException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, KeyManagementException {
+	public SSLContext getSSLContext() throws IOException {
 
 		return getSSLContext("TLS");
 	}
 
-	public SSLContext getSSLContext(String sslOrTls) throws CertificateException, FileNotFoundException, IOException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, KeyManagementException {
+	public SSLContext getSSLContext(String sslOrTls) throws IOException {
 
 		String name = getName();
-		
+
 		String instanceName = System.getProperty(name+".SSLContext.instanceName");
 		String keyStoreType = System.getProperty(name+".SSLContext.keyStore");
 		String passPhrase   = System.getProperty(name+".SSLContext.passphrase");
 		String keyFileName  = System.getProperty(name+".SSLContext.keyFileName");
-		
+
 		boolean error = false;
 		StringBuffer buf = new StringBuffer();
-		
+
 		if(instanceName == null ) {
 			error = true;
 			buf.append("System.property "+name+".SSLContext.instanceName is not defined (SunX509 might work)\r\n");
 		}
-		
+
 		if(keyStoreType == null ) {
 			error = true;
 			buf.append("System.property "+name+".SSLContext.keyStoreType is not defined (JKS or PKCS12)\r\n");
@@ -211,41 +205,45 @@ public class Server extends AbstractCoreServer implements IServer {
 		if( error ) {
 			throw new IllegalStateException("Can't configure secure channel ("+buf.toString()+")");
 		}
-		
-		
-		
+
+
+
 		return getSSLContext(sslOrTls,instanceName,keyStoreType,passPhrase,keyFileName);
 
 	}
 
-	public SSLContext getSSLContext(String sslOrTls, String instanceName, String keyStoreType, String passPhrase, String keyFileName) throws CertificateException, FileNotFoundException, IOException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, KeyManagementException {
+	public SSLContext getSSLContext(String sslOrTls, String instanceName, String keyStoreType, String passPhrase, String keyFileName) throws IOException {
 
 		SSLContext ret;
 		KeyManagerFactory kmf;
 		KeyStore ks;
 		//String name = getName();
-		
-		ret = SSLContext.getInstance(sslOrTls);
-		
-		kmf = KeyManagerFactory.getInstance(instanceName);
-		ks = KeyStore.getInstance(keyStoreType);
+		try {
 
-		char[] passphrase = passPhrase.toCharArray();
-		
-		File f = new File(keyFileName);
-		
-		if( f.exists() == false) {
-			throw new IllegalArgumentException("Key file not found ("+f+")");
+			ret = SSLContext.getInstance(sslOrTls);
+
+			kmf = KeyManagerFactory.getInstance(instanceName);
+			ks = KeyStore.getInstance(keyStoreType);
+
+			char[] passphrase = passPhrase.toCharArray();
+
+			File f = new File(keyFileName);
+
+			if( f.exists() == false) {
+				throw new IllegalArgumentException("Key file not found ("+f+")");
+			}
+
+			ks.load(new FileInputStream(f), passphrase);
+
+
+			kmf.init(ks, passphrase);
+
+			ret.init(kmf.getKeyManagers(), null, null);
+		} catch (Exception e) {
+			throw new IOException(e);
 		}
-		
-		ks.load(new FileInputStream(f), passphrase);
-		
 
-		kmf.init(ks, passphrase);
-		
-		ret.init(kmf.getKeyManagers(), null, null);
-		
-		
+
 		return ret;
 
 	}
@@ -253,22 +251,22 @@ public class Server extends AbstractCoreServer implements IServer {
 	public ServerSocketFactory getServerSocketFactory(boolean isSecure) 
 	{
 		ServerSocketFactory ret = null;
-		
+
 		if (isSecure) {
-		    try {
+			try {
 				// set up key manager to do server authentication
 				SSLContext ctx=getSSLContext();
 				if( ctx != null ) {
 					ret = ctx.getServerSocketFactory();
 				}
-				
+
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		} else {
-		    ret =  ServerSocketFactory.getDefault();
+			ret =  ServerSocketFactory.getDefault();
 		}
-		
+
 		return ret;
 	}
 
@@ -304,7 +302,7 @@ public class Server extends AbstractCoreServer implements IServer {
 					serverSocketFactory = ServerSocketFactory.getDefault();
 				}
 			}
-			
+
 		}
 		return serverSocketFactory;
 	}
@@ -313,9 +311,9 @@ public class Server extends AbstractCoreServer implements IServer {
 		this.serverSocketFactory = serverSocketFactory;
 	}
 
-	
+
 	public void run() {
-	
+
 		// 1>  Make sure we have everything we need to run
 		if(getConnectionFactory() == null ) {
 			logError("No connection factory defined.");
@@ -325,7 +323,7 @@ public class Server extends AbstractCoreServer implements IServer {
 			logError("No processor factory defined.");
 			return;
 		}
-		
+
 		// 2> Create the server socket
 		if( svr == null ) {
 
@@ -340,7 +338,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		if( svr != null ) {
 			started = running = true;
 			lastAdmin = System.currentTimeMillis();
-			
+
 			logInfo("Server "+getName()+" is running on port "+getPort()+".");
 			while( !stopping ) {
 
@@ -363,15 +361,15 @@ public class Server extends AbstractCoreServer implements IServer {
 						proc.setConnection(conn);
 						activeClients.put(socket,proc);
 						proc.start();
-						
+
 					} catch (InstantiationException e) {
 						logError("Can't create Processor", e);
 					} catch (IllegalAccessException e) {
 						logError("Can't create Processor", e);
 					}
 
-					
-					
+
+
 				} catch (SocketTimeoutException e) {
 					// Ignore these
 				} catch (IOException e) {
@@ -382,7 +380,7 @@ public class Server extends AbstractCoreServer implements IServer {
 					doAdmin();
 				}
 			}
-			
+
 			//  We're done so close the serverSocket and exit.
 			try {
 				svr.close();
@@ -390,7 +388,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				logError("Error closing serverSocket",e);
 			}
 		}
-		
+
 		running = false;
 		logInfo("Server "+getName()+" has stopped.");
 	}
@@ -398,7 +396,7 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	protected void doAdmin() {
 		//  Check for idle connections
-		
+
 		Map<Socket, IProcessor> clients = getActiveClients();
 		lastAdmin = System.currentTimeMillis();
 		for (Iterator<Socket> it = clients.keySet().iterator(); it.hasNext();) {
@@ -410,7 +408,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				con.close();				
 			}
 		}
-		
+
 	}
 
 	public IProcessor getProcessor() throws InstantiationException, IllegalAccessException {
@@ -424,10 +422,10 @@ public class Server extends AbstractCoreServer implements IServer {
 		return acceptTimeout;
 	}
 
-	
+
 	public void setAcceptTimeout(int milliSeconds) {
 		acceptTimeout = milliSeconds;
-		
+
 	}
 
 
@@ -440,7 +438,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 	public IConnectionFactory getConnectionFactory() {
-		
+
 		return connectionFactory;
 	}
 
@@ -452,7 +450,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		return runtimeValues;
 	}
 
-	
+
 	public void setRuntimeValues(Map<String, Object> runtimeValues) {
 		this.runtimeValues = runtimeValues;
 	}
@@ -460,7 +458,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	public Object getRuntimeValue(String name) {
 		return getRuntimeValues().get(name);
 	}
-	
+
 	public void setRuntimeValue(String name, Object value) {
 		getRuntimeValues().put(name, value);
 	}
@@ -482,7 +480,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	public Map<Socket, IProcessor> getActiveClients() {
 		return activeClients;
 	}
-	
+
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.net.framwork.IServer#isDebug()
@@ -496,7 +494,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	 */
 	public void setDebug(boolean debug) {
 		this.debug = debug;
-		
+
 	}
 
 	/* (non-Javadoc)
