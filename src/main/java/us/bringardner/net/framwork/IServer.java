@@ -25,14 +25,8 @@
  */
 package us.bringardner.net.framwork;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.Socket;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 import java.util.Map;
 
 import javax.net.ServerSocketFactory;
@@ -87,15 +81,9 @@ public interface IServer extends IManagedThread {
 	/**
 	 * @param sslOrTsl
 	 * @return
-	 * @throws KeyManagementException 
-	 * @throws UnrecoverableKeyException 
-	 * @throws NoSuchAlgorithmException 
-	 * @throws KeyStoreException 
 	 * @throws IOException 
-	 * @throws FileNotFoundException 
-	 * @throws CertificateException 
 	 */
-	public SSLContext getSSLContext(String sslOrTsl) throws CertificateException, FileNotFoundException, IOException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, KeyManagementException;
+	public SSLContext getSSLContext(String sslOrTsl) throws IOException;
 	
 	/**
 	 * @param debug

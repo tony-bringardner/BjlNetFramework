@@ -165,53 +165,26 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	}
 
-	public SSLContext getSSLContext() throws IOException {
-
-		return getSSLContext("TLS");
-	}
-
 	public SSLContext getSSLContext(String sslOrTls) throws IOException {
-
-		String name = getName();
-
-		String instanceName = System.getProperty(name+".SSLContext.instanceName");
-		String keyStoreType = System.getProperty(name+".SSLContext.keyStore");
-		String passPhrase   = System.getProperty(name+".SSLContext.passphrase");
-		String keyFileName  = System.getProperty(name+".SSLContext.keyFileName");
-
-		boolean error = false;
-		StringBuffer buf = new StringBuffer();
-
-		if(instanceName == null ) {
-			error = true;
-			buf.append("System.property "+name+".SSLContext.instanceName is not defined (SunX509 might work)\r\n");
+		
+		SSLContext ret=null;
+		String tmp = getProtocol();
+		
+		try {
+			super.setProtocol(sslOrTls);	
+		} finally {					
+			setProtocol(tmp);
 		}
-
-		if(keyStoreType == null ) {
-			error = true;
-			buf.append("System.property "+name+".SSLContext.keyStoreType is not defined (JKS or PKCS12)\r\n");
-		}
-
-		if(passPhrase == null ) {
-			error = true;
-			buf.append("System.property "+name+".SSLContext.passphrase is not defined\r\n");
-		}
-
-		if(keyFileName == null ) {
-			error = true;
-			buf.append("System.property "+name+".SSLContext.keyFileName is not defined(Absoluet path to file)\r\n");
-		}
-
-		if( error ) {
-			throw new IllegalStateException("Can't configure secure channel ("+buf.toString()+")");
-		}
-
-
-
-		return getSSLContext(sslOrTls,instanceName,keyStoreType,passPhrase,keyFileName);
-
+		
+		
+		ret =  super.getSSLContext();
+		
+		
+		
+		return ret;
 	}
 
+	
 	public SSLContext getSSLContext(String sslOrTls, String instanceName, String keyStoreType, String passPhrase, String keyFileName) throws IOException {
 
 		SSLContext ret;
