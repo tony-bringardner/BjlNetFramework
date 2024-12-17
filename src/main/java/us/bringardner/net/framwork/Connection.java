@@ -25,15 +25,9 @@
  */
 package us.bringardner.net.framwork;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketException;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
@@ -71,8 +65,8 @@ public abstract class Connection extends BaseObject implements IConnection {
 	}
 
 	
-	public Connection(Socket socket,boolean useFTLF) throws IOException {
-		this(useFTLF);		
+	public Connection(Socket socket,boolean useCRLF) throws IOException {
+		this(useCRLF);		
 		setSocket(socket);
 	}
 	
@@ -111,21 +105,25 @@ public abstract class Connection extends BaseObject implements IConnection {
 				throw new IOException(e);
 			}			
 		}
+		
 		SSLSocketFactory factory = ctx.getSocketFactory();
+		//  Any new connections will be secure
+		setSocketFactory(factory);
 		
 		sslSocket = (SSLSocket)factory.createSocket(getSocket(),null, socket.getPort(), false);
+		//TODO:  setWantClientAuth should be configurable		
 		sslSocket.setWantClientAuth(false);
+		//TODO:  setUseClientMode should be configurable
+		sslSocket.setUseClientMode(false);
 		sslSocket.startHandshake();
 		secure = true;
 		
 		configureStreams();
-		//  Any new connections will be secure ???
-		setSocketFactory(factory);
 		
 		
 	}
 	
-	public abstract SSLContext getSSLContext(String sslOrTsl) throws UnrecoverableKeyException, KeyManagementException, CertificateException, FileNotFoundException, KeyStoreException, NoSuchAlgorithmException, IOException ;
+	public abstract SSLContext getSSLContext(String sslOrTsl) throws IOException ;
 
 
 	private void configureStreams() throws IOException {

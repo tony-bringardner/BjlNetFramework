@@ -25,14 +25,8 @@
  */
 package us.bringardner.net.framework;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.Socket;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 
 import javax.net.ssl.SSLContext;
 
@@ -75,9 +69,7 @@ public class TestNetFramwork {
 				return new Connection(socket,true) {
 
 					@Override
-					public SSLContext getSSLContext(String sslOrTsl)
-							throws UnrecoverableKeyException, KeyManagementException, CertificateException,
-							FileNotFoundException, KeyStoreException, NoSuchAlgorithmException, IOException {
+					public SSLContext getSSLContext(String sslOrTsl)throws IOException {
 						return null;
 					}
 

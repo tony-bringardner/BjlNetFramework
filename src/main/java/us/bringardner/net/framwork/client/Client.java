@@ -25,13 +25,8 @@
  */
 package us.bringardner.net.framwork.client;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.UnknownHostException;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
@@ -140,7 +135,7 @@ public class Client extends Connection implements IClient {
 	}
 	
 	@Override
-	public SSLContext getSSLContext(String sslOrTsl) throws UnrecoverableKeyException, KeyManagementException, CertificateException, FileNotFoundException, KeyStoreException, NoSuchAlgorithmException, IOException {
+	public SSLContext getSSLContext(String sslOrTsl) throws IOException {
 		
 		if( context == null ) {
 			synchronized (this) {
