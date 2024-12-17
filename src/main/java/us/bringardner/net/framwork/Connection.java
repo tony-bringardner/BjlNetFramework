@@ -84,15 +84,10 @@ public abstract class Connection extends BaseObject implements IConnection {
 	 * to a secure socket.
 	 * 
 	 * @param sslOrTsl
-	 * @throws KeyManagementException
-	 * @throws CertificateException
-	 * @throws FileNotFoundException
-	 * @throws KeyStoreException
-	 * @throws NoSuchAlgorithmException
-	 * @throws UnrecoverableKeyException
+	 * 
 	 * @throws IOException
 	 */
-	public void negotiateSecureSocket(String sslOrTsl) throws KeyManagementException, CertificateException, FileNotFoundException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, IOException {
+	public void negotiateSecureSocket(String sslOrTsl) throws IOException {
 		if( sslSocket != null ) {
 			sslSocket.close();
 			sslSocket = null;
@@ -106,7 +101,16 @@ public abstract class Connection extends BaseObject implements IConnection {
 			throw new IllegalStateException("Can not negotiate a secure channel from a secure channel.");
 		}
 		
-		SSLContext ctx=getSSLContext(sslOrTsl);
+		SSLContext ctx = null;
+		try {
+			ctx = getSSLContext(sslOrTsl);
+		} catch (Throwable e) {
+			if (e instanceof IOException) {
+				throw (IOException) e;				
+			} else {
+				throw new IOException(e);
+			}			
+		}
 		SSLSocketFactory factory = ctx.getSocketFactory();
 		
 		sslSocket = (SSLSocket)factory.createSocket(getSocket(),null, socket.getPort(), false);

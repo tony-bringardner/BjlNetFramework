@@ -28,15 +28,8 @@
  */
 package us.bringardner.net.framwork;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.Socket;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
-
 
 import javax.net.SocketFactory;
 
@@ -69,7 +62,7 @@ public interface IConnection extends ILineReader, ILineWriter {
 	
 	/**
 	 * @param True if the connection should make a recording of the dialog between 
-	 * the client and the Proccesor.
+	 * the client and the Processor.
 	 */
 	public void setDebug(boolean trueOrFalse);
 	
@@ -98,14 +91,7 @@ public interface IConnection extends ILineReader, ILineWriter {
 
 	/**
 	 * @param sslOrTsl
-	 * @throws IOException 
-	 * @throws UnrecoverableKeyException 
-	 * @throws NoSuchAlgorithmException 
-	 * @throws KeyStoreException 
-	 * @throws FileNotFoundException 
-	 * @throws CertificateException 
-	 * @throws KeyManagementException 
 	 */
-	public void negotiateSecureSocket(String sslOrTsl) throws KeyManagementException, CertificateException, FileNotFoundException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, IOException;
+	public void negotiateSecureSocket(String sslOrTsl) throws IOException;
 	
 }
