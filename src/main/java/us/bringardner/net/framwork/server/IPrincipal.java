@@ -25,6 +25,9 @@
  */
 package us.bringardner.net.framwork.server;
 
+/**
+ * A simple interface to represent a Principle (a.k.a. a User)
+ */
 public interface IPrincipal {
 
 	String getName();

@@ -27,6 +27,11 @@ package us.bringardner.net.framwork.server;
 
 import java.util.List;
 
+/**
+ * Access Control list maintains or produces principles (a.k..a. users) at runtime 
+ * and is responsible for authentication and authorization.
+ * 
+ */
 public interface IAccessControlList {
 
 	boolean checkPermission(IPrincipal user, IPermission action);
