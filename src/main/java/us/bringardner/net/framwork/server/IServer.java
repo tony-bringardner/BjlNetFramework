@@ -23,7 +23,7 @@
  *
  * ~version~V000.00.01-V000.00.00-
  */
-package us.bringardner.net.framwork;
+package us.bringardner.net.framwork.server;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -33,8 +33,10 @@ import javax.net.ServerSocketFactory;
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
 
-import us.bringardner.net.framwork.server.IPermission;
-import us.bringardner.net.framwork.server.IPrincipal;
+import us.bringardner.net.framwork.IConnectionFactory;
+import us.bringardner.net.framwork.IManagedThread;
+import us.bringardner.net.framwork.IProcessor;
+import us.bringardner.net.framwork.IProcessorFactory;
 
 /**
  * 

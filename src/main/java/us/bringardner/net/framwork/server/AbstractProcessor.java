@@ -31,7 +31,6 @@ import java.util.Map;
 import us.bringardner.core.BaseThread;
 import us.bringardner.net.framwork.IConnection;
 import us.bringardner.net.framwork.IProcessor;
-import us.bringardner.net.framwork.IServer;
 
 
 public abstract class AbstractProcessor extends BaseThread implements IProcessor {

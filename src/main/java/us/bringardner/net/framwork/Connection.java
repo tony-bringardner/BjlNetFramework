@@ -41,6 +41,7 @@ import us.bringardner.io.ILineReader;
 import us.bringardner.io.ILineWriter;
 import us.bringardner.io.LFLineReader;
 import us.bringardner.io.LFLineWriter;
+import us.bringardner.net.framwork.server.IServer;
 import us.bringardner.net.framwork.server.Server;
 
 public abstract class Connection extends BaseObject implements IConnection {

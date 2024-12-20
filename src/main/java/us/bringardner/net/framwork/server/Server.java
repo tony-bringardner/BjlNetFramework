@@ -48,7 +48,6 @@ import us.bringardner.net.framwork.IConnection;
 import us.bringardner.net.framwork.IConnectionFactory;
 import us.bringardner.net.framwork.IProcessor;
 import us.bringardner.net.framwork.IProcessorFactory;
-import us.bringardner.net.framwork.IServer;
 
 public class Server extends AbstractCoreServer implements IServer {
 
