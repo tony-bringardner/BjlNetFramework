@@ -83,7 +83,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	private Map<Socket, IProcessor> activeClients = new WeakHashMap<Socket, IProcessor>();
 	private ServerSocket svr = null;
 	private boolean debug;
-	private IAccessControlList acl;
+	private IAccessControlList _accessControl;
 	private String serverGreating;
 
 
@@ -493,11 +493,11 @@ public class Server extends AbstractCoreServer implements IServer {
 	 * @see us.bringardner.net.framwork.IServer#getAcl()
 	 */
 	public IAccessControlList getAcl() {		
-		return acl;
+		return _accessControl;
 	}
 
 	public void setAcl(IAccessControlList acl) {
-		this.acl = acl;		
+		this._accessControl = acl;		
 	}
 
 
