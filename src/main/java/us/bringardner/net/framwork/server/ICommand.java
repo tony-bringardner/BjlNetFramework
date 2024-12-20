@@ -37,4 +37,7 @@ public interface ICommand extends IGenericResponseCode,IPermission {
 	public String getName();
 	public void execute(ICommandProcessor processor,IRequestContext context) throws IOException;
 	public IPermission getPermission() ;
+	default String getHelp() {
+		return "No help availible";
+	}
 }
