@@ -90,8 +90,7 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 					stop();
 				} else {
 					logDebug("Received line="+line);
-					IRequestContext context = getRequestContextFactory()
-							.getRequestContext(line);
+					IRequestContext context = getRequestContextFactory().getRequestContext(line);
 					
 					ICommand command = getCommandFactory().getCommand(context);
 					if( command == null ) {
@@ -107,6 +106,8 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 						}
 						if(isAuthorized(command) ){
 							command.execute(this,context);
+						} else {
+							reply(IGenericResponseCode.REPLY_500_GENERIC_ERROR, command.getName()+" not autherized");
 						}
 					}
 				}
