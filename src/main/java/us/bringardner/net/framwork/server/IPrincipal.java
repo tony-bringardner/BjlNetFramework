@@ -26,7 +26,8 @@
 package us.bringardner.net.framwork.server;
 
 /**
- * A simple interface to represent a Principle (a.k.a. a User)
+ * A simple interface to represent a IPrinciple (a.k.a. a User)
+ * All principles are maintained by an IAccessControlList. 
  */
 public interface IPrincipal {
 

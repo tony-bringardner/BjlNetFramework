@@ -25,19 +25,27 @@
  */
 package us.bringardner.net.framwork.server;
 
-import java.util.List;
-
 /**
- * Access Control list maintains or produces principles (a.k..a. users) at runtime 
+ * Access Control list maintains or produces a list of principles (a.k..a. users) at runtime 
  * and is responsible for authentication and authorization.
  * 
  */
 public interface IAccessControlList {
 
+	/**
+	 * 
+	 * @param user
+	 * @param action
+	 * @return true if the principal is authorized to execute or access the action.
+	 */
 	boolean checkPermission(IPrincipal user, IPermission action);
-
-	List<IPermission> permissions();
-
+	
+	/**
+	 * 
+	 * @param user
+	 * @param password
+	 * @return an authenticated principle or null if authentication failed.
+	 */
 	IPrincipal getPrincipal(String user, byte[] password);
 
 }
