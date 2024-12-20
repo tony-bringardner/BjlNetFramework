@@ -25,13 +25,26 @@
  */
 package us.bringardner.net.framwork.server;
 
+import java.io.IOException;
+
 /**
  * Access Control list maintains or produces a list of principles (a.k..a. users) at runtime 
  * and is responsible for authentication and authorization.
  * 
+ * initialize 
+ * 
  */
 public interface IAccessControlList {
 
+	/**
+	 * Do any work that needs to be done to initialize this controller
+	 * (i.e. load principles from someplace)
+	 * 
+	 * @param server the sever that will used this controller
+	 * @throws IOException
+	 */
+	void initialize (IServer server) throws IOException;
+	
 	/**
 	 * 
 	 * @param user
