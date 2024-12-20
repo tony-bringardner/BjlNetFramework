@@ -473,16 +473,20 @@ public class Server extends AbstractCoreServer implements IServer {
 	 * @see us.bringardner.net.framwork.IServer#authenticate(java.lang.String, byte[])
 	 */
 	public IPrincipal authenticate(String user, byte[] credentials) {
-		// TODO Auto-generated method stub
-		return null;
+		IPrincipal ret = null;
+		IAccessControlList acl = getAccessControl();
+		if(acl != null ) {
+			ret = acl.getPrincipal(user, credentials);
+		}
+		return ret;
 	}
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.net.framwork.IServer#isAuthorized(java.security.Principal, IPermission)
 	 */
 	public boolean isAuthorized(IPrincipal user, IPermission action) {
-		boolean ret = true;
-		IAccessControlList acl = getAcl();
+		boolean ret = false;
+		IAccessControlList acl = getAccessControl();
 		if( acl != null ) {
 			ret = acl.checkPermission(user, action);
 		}
@@ -492,11 +496,11 @@ public class Server extends AbstractCoreServer implements IServer {
 	/* (non-Javadoc)
 	 * @see us.bringardner.net.framwork.IServer#getAcl()
 	 */
-	public IAccessControlList getAcl() {		
+	public IAccessControlList getAccessControl() {		
 		return _accessControl;
 	}
 
-	public void setAcl(IAccessControlList acl) {
+	public void setAccessControl(IAccessControlList acl) {
 		this._accessControl = acl;		
 	}
 
