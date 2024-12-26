@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<!-- A default / minimal configuration for log4j -->
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+<!-- 
+  <appender name="file" class="org.apache.log4j.RollingFileAppender">
+  	<param name="File" value="C:/MyTxxxEmp/log/common.log" /> 
+	<param name="Append" value="true" /> 
+  	<param name="MaxFileSize" value="50MB" /> 
+  	<param name="MaxBackupIndex" value="0" /> 
+	<layout class="org.apache.log4j.PatternLayout">
+  		<param name="ConversionPattern" value="%d %-5p %c{1} - %m%n" /> 
+  	</layout>
+  </appender>
+ -->
+ 
+ 	<appender name="std.out" class="org.apache.log4j.ConsoleAppender">
+		<param name="Target" value="System.out"/>
+		<layout class="org.apache.log4j.PatternLayout">
+			<param name="ConversionPattern" value="%d{HH:mm:ss:SSS} %-5p %c{1} - %m%n"/>
+		</layout>
+		<filter class="org.apache.log4j.varia.LevelRangeFilter">
+			<param name="LevelMin" value="debug"/>
+			<param name="LevelMax" value="info"/>
+			<param name="LevelMax" value="warn"/>
+			<param name="AcceptOnMatch" value="true"/>
+		</filter>
+		<filter class="org.apache.log4j.varia.DenyAllFilter"/>
+	</appender>
+	
+	<appender name="std.err" class="org.apache.log4j.ConsoleAppender">
+		<param name="Target" value="System.err"/>
+		<layout class="org.apache.log4j.PatternLayout">
+			<param name="ConversionPattern" value="%d{HH:mm:ss:SSS} %-5p %c{1} - %m%n"/>
+		</layout>
+		<filter class="org.apache.log4j.varia.LevelRangeFilter">
+			<param name="LevelMin" value="error"/>
+			<param name="LevelMax" value="fatal"/>
+			<param name="AcceptOnMatch" value="true"/>
+		</filter>
+		<filter class="org.apache.log4j.varia.DenyAllFilter"/>
+	</appender>
+
+	<root>
+		<level value="debug"/>
+		<appender-ref ref="std.out"/>
+		<appender-ref ref="std.err"/>
+		<!-- 
+		<appender-ref ref="file"/>
+		 -->
+	</root>
+</log4j:configuration>
