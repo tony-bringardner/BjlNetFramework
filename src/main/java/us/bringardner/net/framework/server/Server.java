@@ -136,7 +136,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		Server.defaultConnectionTimeout = defaultConnectionTimeout;
 	}
 
-	
+
 	public  SocketFactory getSocketFactory(boolean isSecure) {
 		SocketFactory ret = null;
 
@@ -160,25 +160,25 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 	public SSLContext getSSLContext(String sslOrTls) throws IOException {
-		
+
 		SSLContext ret=null;
 		String tmp = getProtocol();
-		
+
 		try {
 			super.setProtocol(sslOrTls);	
 		} finally {					
 			setProtocol(tmp);
 		}
-		
-		
+
+
 		ret =  super.getSSLContext();
-		
-		
-		
+
+
+
 		return ret;
 	}
 
-	
+
 	public SSLContext getSSLContext(String sslOrTls, String instanceName, String keyStoreType, String passPhrase, String keyFileName) throws IOException {
 
 		SSLContext ret;
@@ -316,28 +316,32 @@ public class Server extends AbstractCoreServer implements IServer {
 				Socket socket;
 				try {
 					socket = svr.accept();
-					logDebug("Incomming conenction from "+socket);
-					//  Start the processing
-					IConnection conn = null;
-					conn = getConnectionFactory().getConnection(socket);
 
-					try {
+					if( socket != null ) {
+						logDebug("Incomming conenction from "+socket);
+						//  Start the processing
+						IConnection conn = null;
+						conn = getConnectionFactory().getConnection(socket);
 
-						if( serverGreating != null && !serverGreating.isEmpty()) {
-							conn.writeLine(serverGreating);
+						try {
+
+							if( serverGreating != null && !serverGreating.isEmpty()) {
+								conn.writeLine(serverGreating);
+							}
+							IProcessor proc = getProcessor();
+							proc.setConnection(conn);
+							activeClients.put(socket,proc);
+							proc.start();
+
+						} catch (InstantiationException e) {
+							logError("Can't create Processor", e);
+						} catch (IllegalAccessException e) {
+							logError("Can't create Processor", e);
 						}
-						IProcessor proc = getProcessor();
-						proc.setConnection(conn);
-						activeClients.put(socket,proc);
-						proc.start();
-
-					} catch (InstantiationException e) {
-						logError("Can't create Processor", e);
-					} catch (IllegalAccessException e) {
-						logError("Can't create Processor", e);
 					}
-
-
+					if( (System.currentTimeMillis()-lastAdmin) > adminFreq) {
+						doAdmin();
+					}
 
 				} catch (SocketTimeoutException e) {
 					// Ignore these
@@ -345,9 +349,7 @@ public class Server extends AbstractCoreServer implements IServer {
 					// Report the error
 					logError("Error in server run",e);
 				}
-				if( (System.currentTimeMillis()-lastAdmin) > adminFreq) {
-					doAdmin();
-				}
+
 			}
 
 			//  We're done so close the serverSocket and exit.
@@ -365,17 +367,23 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	protected void doAdmin() {
 		//  Check for idle connections
-
-		Map<Socket, IProcessor> clients = getActiveClients();
-		lastAdmin = System.currentTimeMillis();
-		for (Iterator<Socket> it = clients.keySet().iterator(); it.hasNext();) {
-			Socket sock = (Socket) it.next();
-			IProcessor element = (IProcessor) clients.get(sock);
-			IConnection con = element.getConnection();
-			if((lastAdmin-con.getLastReadTime()) > maxIdleConnection  && (lastAdmin-con.getLastWriteTime()) > maxIdleConnection) {
-				it.remove();
-				con.close();				
+		try {
+			Map<Socket, IProcessor> clients = getActiveClients();
+			lastAdmin = System.currentTimeMillis();
+			for (Iterator<Socket> it = clients.keySet().iterator(); it.hasNext();) {
+				Socket sock = (Socket) it.next();
+				IProcessor element = (IProcessor) clients.get(sock);
+				IConnection con = element.getConnection();
+				if((lastAdmin-con.getLastReadTime()) > maxIdleConnection  && (lastAdmin-con.getLastWriteTime()) > maxIdleConnection) {
+					it.remove();
+					try {
+						con.close();	
+					} catch (Throwable e) {
+					}									
+				}
 			}
+		} catch (Throwable e) {
+			logDebug("Error in doAdmin", e);
 		}
 
 	}
@@ -517,7 +525,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				}
 			}
 		}
-			
+
 		return accessControl;
 	}
 
