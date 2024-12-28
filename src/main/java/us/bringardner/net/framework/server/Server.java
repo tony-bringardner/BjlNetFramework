@@ -353,17 +353,36 @@ public class Server extends AbstractCoreServer implements IServer {
 			}
 
 			//  We're done so close the serverSocket and exit.
-			try {
-				svr.close();
-			} catch (IOException e) {
-				logError("Error closing serverSocket",e);
-			}
+			close(svr);
 		}
 
 		running = false;
 		logInfo("Server "+getName()+" has stopped.");
 	}
 
+
+	/**
+	 * Close all in process clients
+	 * 
+	 * @param svr
+	 */
+	private void close(ServerSocket svr) {
+		Map<Socket, IProcessor> clients = getActiveClients();
+		for (Socket sock : clients.keySet()) {
+			IProcessor element = (IProcessor) clients.get(sock);
+			IConnection con = element.getConnection();
+			try {
+				con.close();
+			} catch (Exception e) {
+			}
+		}
+		
+		try {
+			svr.close();
+		} catch (Exception e) {
+		}
+
+	}
 
 	protected void doAdmin() {
 		//  Check for idle connections
