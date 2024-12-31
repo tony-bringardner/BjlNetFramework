@@ -118,29 +118,16 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 				}
 			} catch(SocketTimeoutException e) {
 				//  We'll ignore these.  May not want to do this in all cases.
-			} catch (SocketException e) {
-				logError("Error in run",e);
-				stop();
-			} catch (IOException e) {
-				logError("Error in run",e);
-				stop();
-			} catch(Exception e) {
-				logError("Error in run",e);
-				try {
-					reply(REPLY_500_GENERIC_ERROR, "An error occured processing the request. Error ="+e);
-				} catch(IOException ex) {
-					logError("Error trying to reply to client",ex);
-					stop();					
-				}
-			} catch(Throwable t) {
-				logError("Error in run",t);
-				try {
-					reply(REPLY_500_GENERIC_ERROR, "An error occured processing the request. Error ="+t);
-				} catch(IOException ex) {
-					logError("Error trying to reply to client",ex);
-					stop();					
+			} catch(Throwable e) {
+				if(! e.toString().toLowerCase().contains("close")) {
+					logError("Error in run",e);
 				}
 				
+				try {
+					reply(REPLY_500_GENERIC_ERROR, "An error occured processing the request. Error ="+e);
+				} catch(Throwable ex) {
+				}
+				stop();
 			}
 		}
 		
