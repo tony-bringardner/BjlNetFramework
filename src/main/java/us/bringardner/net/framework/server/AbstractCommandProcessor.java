@@ -31,7 +31,6 @@ package us.bringardner.net.framework.server;
  *    
  */
 import java.io.IOException;
-import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.Map;
 import java.util.TreeMap;
