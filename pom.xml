@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<version>0.1.0</version>
 	<groupId>us.bringardner</groupId>
-	<artifactId>bjl_network_framework</artifactId>
+	<artifactId>bjl_net_framework</artifactId>
 	<name>Network Framework</name>
 	<description>A framework for implementating network protocols (FTP, SMTP, POP3, ...)</description>
 	
@@ -91,7 +91,7 @@
 
 		<dependency>
 			<groupId>us.bringardner</groupId>
-			<artifactId>bjl_network_core</artifactId>
+			<artifactId>bjl_net</artifactId>
 			<version>0.1.0</version>
 		</dependency>
 		
