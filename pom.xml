@@ -89,10 +89,10 @@
 
 	<dependencies>
 
-		<dependency>
-			<groupId>us.bringardner</groupId>
-			<artifactId>bjl_net</artifactId>
-			<version>0.1.0</version>
+	<dependency>
+  			<groupId>us.bringardner</groupId>
+  			<artifactId>bjl_network_core</artifactId>
+  			<version>0.1.0</version>
 		</dependency>
 		
 		<dependency>
