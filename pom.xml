@@ -2,7 +2,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<version>0.1.0</version>
+	<version>0.1.1</version>
 	<groupId>us.bringardner</groupId>
 	<artifactId>bjl_net_framework</artifactId>
 	<name>Network Framework</name>
@@ -16,8 +16,8 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>3.3</version>
 					<configuration>
-						<source>9</source>
-						<target>9</target>
+						<source>11</source>
+						<target>11</target>
 					</configuration>
 				</plugin>
 
@@ -89,12 +89,16 @@
 
 	<dependencies>
 
-	<dependency>
-  			<groupId>us.bringardner</groupId>
-  			<artifactId>bjl_network_core</artifactId>
-  			<version>0.1.0</version>
+		<dependency>
+			<groupId>us.bringardner</groupId>
+			<artifactId>bjl_core</artifactId>
+			<version>0.1.1</version>
 		</dependency>
-		
+		<dependency>
+			<groupId>us.bringardner</groupId>
+			<artifactId>bjl_io</artifactId>
+			<version>0.1.1</version>
+		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
