@@ -32,8 +32,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.security.KeyStore;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -48,9 +50,102 @@ import us.bringardner.net.framework.IConnection;
 import us.bringardner.net.framework.IConnectionFactory;
 import us.bringardner.net.framework.IProcessor;
 import us.bringardner.net.framework.IProcessorFactory;
+import us.bringardner.net.framework.server.IPrincipal.State;
 
 public class Server extends AbstractCoreServer implements IServer {
 
+	private static class ImutableFIleBasedPrincipal implements IPrincipal {
+
+		IPrincipal target ;
+		State state = State.Authenticated;
+		
+		ImutableFIleBasedPrincipal (IPrincipal tmp) {
+			this.target = tmp;
+		}
+
+
+		@Override
+		public boolean authenticate(byte[] credentials) {
+			throw new UnsupportedOperationException("This is an imutable principal");
+		}
+
+		@Override
+		public State getState() {
+			return state;
+		}
+
+		@Override
+		public void setState(State state) {
+			this.state= state;	
+		}
+
+		@Override
+		public byte[] getCredentials() {
+			throw new UnsupportedOperationException("Credentials are not visible here");			
+		}
+
+		@Override
+		public void setCredentials(byte[] credentials) {
+			throw new UnsupportedOperationException("This is an imutable principal");			
+		}
+
+		@Override
+		public void add(IPermission permission) {
+			throw new UnsupportedOperationException("This is an imutable principal");			
+		}
+
+		@Override
+		public boolean hasPermission(IPermission permision) {			
+			return target.hasPermission(permision);
+		}
+
+		@Override
+		public boolean remove(IPermission permission) {
+			throw new UnsupportedOperationException("This is an imutable principal");
+		}
+
+		@Override
+		public List<IPermission> getPermisssions() {			
+			return Collections.unmodifiableList(target.getPermisssions());
+		}
+
+		@Override
+		public void setPermissions(List<IPermission> permissions) {
+			throw new UnsupportedOperationException("This is an imutable principal");			
+		}
+
+		@Override
+		public Object getParameter(Object key) {			
+			return target.getParameter(key);
+		}
+
+		@Override
+		public Object removeParameter(Object key) {
+			throw new UnsupportedOperationException("This is an imutable principal");
+		}
+
+		@Override
+		public void setParameter(Object key, Object value) {
+			throw new UnsupportedOperationException("This is an imutable principal");			
+		}
+
+		@Override
+		public Map<Object, Object> getParameters() {
+			return Collections.unmodifiableMap(target.getParameters());
+		}
+
+		@Override
+		public void setParameters(Map<Object, Object> parameters) {
+			throw new UnsupportedOperationException("This is an imutable principal");
+
+		}
+
+		@Override
+		public String getName() {			
+			return target.getName();
+		}
+
+	}
 	/**
 	 * 
 	 */
@@ -500,8 +595,13 @@ public class Server extends AbstractCoreServer implements IServer {
 		IPrincipal ret = null;
 		IAccessControlList acl = getAccessControl();
 		if(acl != null ) {
-			ret = acl.getPrincipal(user, credentials);
+			IPrincipal tmp = acl.getPrincipal(user);
+			if( tmp !=null && tmp.authenticate(credentials)) {
+				ret = new ImutableFIleBasedPrincipal(tmp);
+				ret.setState(State.Authenticated);
+			}
 		}
+		
 		return ret;
 	}
 

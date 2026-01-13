@@ -56,9 +56,8 @@ public interface IAccessControlList {
 	/**
 	 * 
 	 * @param user
-	 * @param password
-	 * @return an authenticated principle or null if authentication failed.
+	 * @return an principle or null if the user/principal does not exist.
 	 */
-	IPrincipal getPrincipal(String user, byte[] password);
+	IPrincipal getPrincipal(String user);
 
 }

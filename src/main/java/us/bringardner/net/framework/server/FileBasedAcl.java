@@ -4,9 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import us.bringardner.core.BaseObject;
@@ -37,98 +35,6 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 
 			return ret;
 		}
-	}
-
-	private static class ImutableFIleBasedPrincipal implements IPrincipal {
-
-		IPrincipal target ;
-
-		ImutableFIleBasedPrincipal (IPrincipal tmp) {
-			this.target = tmp;
-		}
-
-
-		@Override
-		public boolean authenticate(byte[] credentials) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-		}
-
-		@Override
-		public State getState() {
-			return target.getState();
-		}
-
-		@Override
-		public void setState(State state) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public byte[] getCredentials() {
-			throw new UnsupportedOperationException("Credentials are not visible here");			
-		}
-
-		@Override
-		public void setCredentials(byte[] credentials) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public void add(IPermission permission) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public boolean hasPermission(IPermission permision) {			
-			return target.hasPermission(permision);
-		}
-
-		@Override
-		public boolean remove(IPermission permission) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-		}
-
-		@Override
-		public List<IPermission> getPermisssions() {			
-			return Collections.unmodifiableList(target.getPermisssions());
-		}
-
-		@Override
-		public void setPermissions(List<IPermission> permissions) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public Object getParameter(Object key) {			
-			return target.getParameter(key);
-		}
-
-		@Override
-		public Object removeParameter(Object key) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-		}
-
-		@Override
-		public void setParameter(Object key, Object value) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public Map<Object, Object> getParameters() {
-			return Collections.unmodifiableMap(target.getParameters());
-		}
-
-		@Override
-		public void setParameters(Map<Object, Object> parameters) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-
-		}
-
-		@Override
-		public String getName() {			
-			return target.getName();
-		}
-
 	}
 
 	private Map<String , IPrincipal> users = new HashMap<>();
@@ -232,16 +138,8 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 
 
 	@Override
-	public IPrincipal getPrincipal(String user, byte[] password) {
-		IPrincipal ret = null;
-
-		IPrincipal tmp = users.get(user);
-		if( tmp != null ) {
-			if(tmp.authenticate(password)) {
-				tmp.setState(State.Authenticated);
-				ret = new ImutableFIleBasedPrincipal(tmp);
-			}
-		}
+	public IPrincipal getPrincipal(String user) {
+		IPrincipal ret = users.get(user);
 
 		return ret;
 	}

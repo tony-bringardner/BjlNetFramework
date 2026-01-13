@@ -55,8 +55,9 @@ public class TestFileBasedAcl {
 		 */
 		byte[] password = "password".getBytes();
 
-		IPrincipal p = acl.getPrincipal("user1", password);
-		assertNotNull(p, "user1 was not authenticated");
+		IPrincipal p = acl.getPrincipal("user1");
+		
+		assertTrue(p.authenticate(password), "user1 was not authenticated");
 
 		List<IPermission> perms = p.getPermisssions();
 		assertNotNull(perms, "permissionlist is null");
@@ -70,8 +71,8 @@ public class TestFileBasedAcl {
 		assertEquals("val4", map.get("key4"),"Wrong parameter value for key4");
 
 
-		p = acl.getPrincipal("echoUser", password);
-		assertNotNull(p, "echoUser was not authenticated");
+		p = acl.getPrincipal("echoUser");
+		assertTrue(p.authenticate(password), "echoUser was not authenticated");
 
 		perms = p.getPermisssions();
 		assertNotNull(perms, "permissionlist is null");
