@@ -34,9 +34,9 @@ import us.bringardner.net.framework.IGenericResponseCode;
 
 public class SingleCommandResponse extends BaseObject implements ICommandResponse {
 
-	private List<String> fullResponse = new ArrayList<String>();
-	private int code;
-	private String text;
+	protected List<String> fullResponse = new ArrayList<String>();
+	protected int code;
+	protected String text;
 	
 	
 	public String[] getFullResponse() {

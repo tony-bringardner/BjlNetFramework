@@ -96,7 +96,9 @@ public abstract class AbstractProcessor extends BaseThread implements IProcessor
 	}
 	
 	public Object getSessionValue(String name) {
-		return sessionValues.get(name);
+		Object ret = sessionValues.get(name);
+		
+		return ret;
 	}
 	
 	public Object removeSessionValue(String name) {

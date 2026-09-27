@@ -25,6 +25,8 @@
  */
 package us.bringardner.net.framework.client;
 
+import java.io.IOException;
+
 import us.bringardner.net.framework.IConnection;
 
 
@@ -40,8 +42,8 @@ public interface IClient extends IConnection {
 
 	public abstract boolean isConnected();
 
-	public abstract boolean connect();
+	public abstract boolean connect() throws IOException;
 
-	public abstract void close();
+	public abstract void close() throws IOException;
 
 }

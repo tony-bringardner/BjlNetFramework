@@ -111,7 +111,7 @@ public class Client extends Connection implements IClient {
 	/* (non-Javadoc)
 	 * @see us.bringardner.net.impl.client.ConnectionI#connect()
 	 */
-	public boolean connect() {
+	public boolean connect() throws IOException {
 		
 			try {
 				setSocket(getSocketFactory().createSocket(getHost(),getPort()));
@@ -129,7 +129,7 @@ public class Client extends Connection implements IClient {
 	/* (non-Javadoc)
 	 * @see us.bringardner.net.impl.client.ConnectionI#close()
 	 */
-	public void close() {
+	public void close() throws IOException {
 		super.close();
 		connected = false;
 	}

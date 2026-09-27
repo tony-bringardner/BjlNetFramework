@@ -132,7 +132,12 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 		
 		running = false;
 		getServer().removeClient(this);
-		con.close();
+		try {
+			con.close();
+		} catch (IOException e) {
+			logError("error on close", e);
+		}
+		
 		if( isDebug()) {
 			System.out.println(""+cmdUsed.size()+" Server commands used");
 			for(String key : cmdUsed.keySet()) {

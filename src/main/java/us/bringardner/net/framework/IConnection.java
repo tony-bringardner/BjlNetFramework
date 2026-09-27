@@ -86,8 +86,9 @@ public interface IConnection extends ILineReader, ILineWriter {
 	
 	/**
 	 * Close this Connection. 
+	 * @throws IOException 
 	 */
-	public void close();
+	public void close() throws IOException;
 
 	/**
 	 * @param sslOrTsl

@@ -190,7 +190,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 		}
 	}
 
-	public void close() {
+	public void close() throws IOException {
 		logDebug("Clossing socket="+socket);
 		if( reader != null ) {
 			try {

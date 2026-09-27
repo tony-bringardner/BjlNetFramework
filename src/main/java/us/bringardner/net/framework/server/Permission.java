@@ -19,6 +19,11 @@ public class Permission implements IPermission {
 	}
 	
 	@Override
+	public String toString() {
+		return name;
+	}
+	
+	@Override
 	public boolean equals(Object obj) {
 		boolean ret = false;
 		if (obj instanceof IPermission) {
