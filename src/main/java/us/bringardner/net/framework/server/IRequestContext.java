@@ -35,12 +35,25 @@ public interface IRequestContext extends Serializable {
 	/**
 	 * @return the String configured as a token seperator for this IRequestContext.
 	 */
+	/** @deprecated misspelled, call {@link #getSeparator()} */
+	@Deprecated
 	public String getSeperator();
 	
 	/**
 	 * @param seperator
 	 */
+	/** @deprecated misspelled, call {@link #setSeparator(String)} */
+	@Deprecated
 	public void setSeperator(String seperator);
+
+	/** @return the token separator (a single character is literal, longer values are a regex) */
+	public default String getSeparator() {
+		return getSeperator();
+	}
+
+	public default void setSeparator(String separator) {
+		setSeperator(separator);
+	}
 	
 	/**
 	 * Set the original command line. 

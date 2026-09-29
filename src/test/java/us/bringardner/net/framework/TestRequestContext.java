@@ -40,7 +40,7 @@ public class TestRequestContext {
 	@Test
 	public void testLiteralSeparator() {
 		DefaultRequestContext ctx = new DefaultRequestContext("a|b|c");
-		ctx.setSeperator("|");
+		ctx.setSeparator("|");
 		assertArrayEquals(new String[] {"a","b","c"}, ctx.getTokens());
 		assertEquals("a", ctx.getNextToken());
 		assertEquals("b|c", ctx.getRemainingTokens());
@@ -49,7 +49,7 @@ public class TestRequestContext {
 	@Test
 	public void testRegexSeparator() {
 		DefaultRequestContext ctx = new DefaultRequestContext("a \t b   c");
-		ctx.setSeperator("\\s+");
+		ctx.setSeparator("\\s+");
 		assertArrayEquals(new String[] {"a","b","c"}, ctx.getTokens());
 		ctx.getNextToken();
 		// previously the regex itself was inserted between the tokens

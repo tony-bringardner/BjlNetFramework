@@ -32,8 +32,21 @@ import java.io.IOException;
 
 public interface ICommandClient extends IClient {
 	
+	/** @deprecated misspelled, call {@link #setSeparator(String)} */
+	@Deprecated
 	public void setSeperator(String seperator);
+	/** @deprecated misspelled, call {@link #getSeparator()} */
+	@Deprecated
 	public String getSeperator();
+
+	/** @return the separator placed between a command and its arguments */
+	public default String getSeparator() {
+		return getSeperator();
+	}
+
+	public default void setSeparator(String separator) {
+		setSeperator(separator);
+	}
 	
 	public ICommandResponse executeCommand(String command) throws IOException;
 	public ICommandResponseFactory getCommandResponseFactory();

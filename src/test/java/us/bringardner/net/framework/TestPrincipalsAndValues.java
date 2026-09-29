@@ -35,7 +35,7 @@ public class TestPrincipalsAndValues {
 		FileBasedPrincipal p = new FileBasedPrincipal("user");
 		p.add(A);
 		p.add(new Permission("A"));
-		assertEquals(1, p.getPermisssions().size());
+		assertEquals(1, p.getPermissions().size());
 		assertTrue(p.remove(A));
 		assertFalse(p.hasPermission(A), "a removed permission must be revoked");
 		assertFalse(p.remove(A));
@@ -54,7 +54,7 @@ public class TestPrincipalsAndValues {
 	public void testNullsIgnored() {
 		FileBasedPrincipal p = new FileBasedPrincipal("user");
 		p.add(null);
-		assertTrue(p.getPermisssions().isEmpty());
+		assertTrue(p.getPermissions().isEmpty());
 		assertFalse(p.hasPermission(null));
 		assertFalse(p.remove(null));
 	}
@@ -64,13 +64,13 @@ public class TestPrincipalsAndValues {
 		FileBasedPrincipal p = new FileBasedPrincipal("user");
 		p.add(new Permission("old"));
 		p.setPermissions(Arrays.asList(B, A, null, new Permission("B")));
-		List<IPermission> perms = p.getPermisssions();
+		List<IPermission> perms = p.getPermissions();
 		assertEquals(2, perms.size());
 		assertEquals("B", perms.get(0).getName());
 		assertEquals("A", perms.get(1).getName());
 		assertFalse(p.hasPermission(new Permission("old")));
 		p.setPermissions(null);
-		assertTrue(p.getPermisssions().isEmpty());
+		assertTrue(p.getPermissions().isEmpty());
 	}
 
 	@Test
@@ -152,7 +152,7 @@ public class TestPrincipalsAndValues {
 		// The server hands out a read only view
 		assertThrows(UnsupportedOperationException.class, () -> hashed.add(B));
 		assertThrows(UnsupportedOperationException.class, () -> hashed.getCredentials());
-		assertThrows(UnsupportedOperationException.class, () -> hashed.getPermisssions().add(B));
+		assertThrows(UnsupportedOperationException.class, () -> hashed.getPermissions().add(B));
 	}
 
 	@Test

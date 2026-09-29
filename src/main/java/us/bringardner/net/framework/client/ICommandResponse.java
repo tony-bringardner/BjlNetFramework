@@ -29,7 +29,19 @@ import java.io.IOException;
 
 public interface ICommandResponse {
 	
+	/**
+	 * @deprecated misspelled, call {@link #readResponse(ICommandClient)}. Implementations still 
+	 * implement this method in 1.x; it becomes readResponse in 2.0.
+	 */
+	@Deprecated
 	public void readResonse(ICommandClient client) throws IOException;
+
+	/**
+	 * Read one reply from the client connection.
+	 */
+	public default void readResponse(ICommandClient client) throws IOException {
+		readResonse(client);
+	}
 	public int translateResponseCode(String code);
 	public int getResponseCode();
 	public String getResponseText();

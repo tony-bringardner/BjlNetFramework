@@ -86,7 +86,7 @@ public class DynamicTrustManager extends X509ExtendedTrustManager {
 	private static final Map<String,String> sessionTrusted = new ConcurrentHashMap<String, String>();
 
 	static {
-		try(BufferedReader in = new BufferedReader(new FileReader(getPersistanceFile()))) {
+		try(BufferedReader in = new BufferedReader(new FileReader(getPersistenceFile()))) {
 			String line = in.readLine();
 			while( line != null ) {
 				if(!line.startsWith("#")) {
@@ -104,7 +104,7 @@ public class DynamicTrustManager extends X509ExtendedTrustManager {
 
 	private static synchronized void saveTrusted() throws IOException {
 		// Write a temp file and move it into place so a crash can't leave a truncated file.
-		File target = getPersistanceFile();
+		File target = getPersistenceFile();
 		File tmp = new File(target.getParentFile(), target.getName()+".tmp");
 		try(PrintStream out = new PrintStream(tmp)) {
 			for (Map.Entry<String, String> e : trusted.entrySet()) {
@@ -121,7 +121,7 @@ public class DynamicTrustManager extends X509ExtendedTrustManager {
 		}
 	}
 
-	private static File getPersistanceFile() {
+	private static File getPersistenceFile() {
 		File ret = new File(System.getProperty("user.home"),".bjlTructed");
 		return ret;
 	}

@@ -37,6 +37,7 @@ import javax.net.ssl.SSLSocketFactory;
 
 import us.bringardner.core.BaseObject;
 import us.bringardner.core.SecureBaseObject;
+import us.bringardner.io.AbstractLineReader;
 import us.bringardner.io.CRLFLineReader;
 import us.bringardner.io.CRLFLineWriter;
 import us.bringardner.io.ILineReader;
@@ -193,7 +194,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 	private void configureStreams() throws IOException {
 		Socket socket = getSocket();
 		
-		ILineReader r;
+		AbstractLineReader r;
 		if (useCRLF) {
 			r = new CRLFLineReader(socket.getInputStream());
 			writer = new CRLFLineWriter(socket.getOutputStream(),outBufSize);
@@ -201,7 +202,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 			r = new LFLineReader(socket.getInputStream());
 			writer = new LFLineWriter(socket.getOutputStream(),outBufSize);
 		}
-		applyMaxLineLength(r, maxLineLength);
+		r.setMaxLineLength(maxLineLength);
 		reader = r;
 	}
 
@@ -228,22 +229,8 @@ public abstract class Connection extends BaseObject implements IConnection {
 	public void setMaxLineLength(int max) {
 		maxLineLength = max;
 		ILineReader r = reader;
-		if( r != null ) {
-			applyMaxLineLength(r, max);
-		}
-	}
-
-	/*
-	 * AbstractLineReader.setMaxLineLength was added to bjl_io without a version change, 
-	 * so call it only if the bjl_io on the class path has it.
-	 */
-	private void applyMaxLineLength(ILineReader r, int max) {
-		try {
-			r.getClass().getMethod("setMaxLineLength", int.class).invoke(r, max);
-		} catch (NoSuchMethodException e) {
-			logDebug("This bjl_io version does not support a max line length");
-		} catch (Exception e) {
-			logError("Can't set max line length", e);
+		if( r instanceof AbstractLineReader ) {
+			((AbstractLineReader) r).setMaxLineLength(max);
 		}
 	}
 

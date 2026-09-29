@@ -43,16 +43,28 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 	private String [] tokens;
 	// Offset of each token in the command line, used by getRemainingTokens()
 	private int [] starts;
-	private String seperator =getDefaultSeperator();
+	private String seperator =getDefaultSeparator();
 	private int pos=0;
 	
 	
+	public static String getDefaultSeparator() {
+		return defaultSeperator;
+	}
+
+	public static void setDefaultSeparator(String separator) {
+		DefaultRequestContext.defaultSeperator = separator;
+	}
+
+	/** @deprecated misspelled, use {@link #getDefaultSeparator()} */
+	@Deprecated
 	public static String getDefaultSeperator() {
 		return defaultSeperator;
 	}
 
 
 
+	/** @deprecated misspelled, use {@link #setDefaultSeparator(String)} */
+	@Deprecated
 	public static void setDefaultSeperator(String defaultSeperator) {
 		DefaultRequestContext.defaultSeperator = defaultSeperator;
 	}
@@ -109,7 +121,7 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 
 	public String[] getTokens() {
 		if( tokens == null ) {
-			String sep = getSeperator();
+			String sep = getSeparator();
 			// A single character is always literal ("|" or "." would otherwise be regex operators).
 			// Longer separators are still treated as a regex for compatibility.
 			if( sep.length() == 1 ) {

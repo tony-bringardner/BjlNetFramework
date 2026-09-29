@@ -23,7 +23,7 @@ public class TestFileBasedAcl {
 	@AfterEach
 	public void clearProperties() {
 		// System properties are JVM wide, don't leak them into other tests
-		System.clearProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY);
+		System.clearProperty(IServer.AUTHENTICATION_PROVIDER_PROPERTY);
 		System.clearProperty("TestSetver.user0");
 		System.clearProperty("TestSetver.user1");
 		System.clearProperty("TestSetver.userFile");
@@ -33,7 +33,7 @@ public class TestFileBasedAcl {
 	public void testPropertyAcl() {
 		String serverName = "TestSetver";
 
-		System.setProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY, PropertyAuthenticator.class.getCanonicalName());
+		System.setProperty(IServer.AUTHENTICATION_PROVIDER_PROPERTY, PropertyAuthenticator.class.getCanonicalName());
 		System.setProperty(serverName+".user0","echoUser, password  , Echo|Login, key1=val1|key2=val2");
 		System.setProperty(serverName+".user1","user1  , password   , one|two|three|four|five, key3=val3|key4=val4");
 		validateAcl(serverName);
@@ -44,7 +44,7 @@ public class TestFileBasedAcl {
 	public void testFileBasedAcl () {
 		String serverName = "TestSetver";
 
-		System.setProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY, FileBasedAcl.class.getCanonicalName());
+		System.setProperty(IServer.AUTHENTICATION_PROVIDER_PROPERTY, FileBasedAcl.class.getCanonicalName());
 		System.setProperty(serverName+".userFile","FileBasedAcl.txt");
 		
 		validateAcl(serverName);
@@ -69,7 +69,7 @@ public class TestFileBasedAcl {
 		
 		assertTrue(p.authenticate(password), "user1 was not authenticated");
 
-		List<IPermission> perms = p.getPermisssions();
+		List<IPermission> perms = p.getPermissions();
 		assertNotNull(perms, "permissionlist is null");
 		String [] tmp1 = {"one","two","three","four","five"};
 		assertEquals(tmp1.length, perms.size(),"Wrong permission size");
@@ -84,7 +84,7 @@ public class TestFileBasedAcl {
 		p = acl.getPrincipal("echoUser");
 		assertTrue(p.authenticate(password), "echoUser was not authenticated");
 
-		perms = p.getPermisssions();
+		perms = p.getPermissions();
 		assertNotNull(perms, "permissionlist is null");
 		String [] tmp = {"Echo","Login"};
 		assertEquals(tmp.length, perms.size(),"Wrong permission size");

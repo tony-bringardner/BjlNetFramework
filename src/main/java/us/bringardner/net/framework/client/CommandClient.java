@@ -48,14 +48,14 @@ public class CommandClient extends Client implements ICommandClient {
 		ICommandResponse ret = getCommandResponseFactory().getCommandResponse();
 		writeLine(command);
 		flush();
-		ret.readResonse(this);
+		ret.readResponse(this);
 		return ret;
 	}
 
 	public ICommandResponse executeCommand(String command, String[] args) throws IOException {
 		StringBuffer buf = new StringBuffer(command);
 		if( args != null ) {
-			String seperator = getSeperator();
+			String seperator = getSeparator();
 			for (int idx = 0; idx < args.length; idx++) {
 				buf.append(seperator);
 				buf.append(args[idx]);
@@ -93,7 +93,7 @@ public class CommandClient extends Client implements ICommandClient {
 	
 
 	public ICommandResponse executeCommand(String ... args) throws IOException {
-		String sep = getSeperator();
+		String sep = getSeparator();
 		StringBuilder buf = new StringBuilder();
 		for (int idx = 0; idx < args.length; idx++) {
 			if( idx>0) {

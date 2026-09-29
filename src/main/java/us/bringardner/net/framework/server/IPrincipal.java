@@ -48,7 +48,19 @@ public interface IPrincipal {
 	void add(IPermission permission) ;
 	boolean hasPermission(IPermission permision) ;
 	boolean remove(IPermission permission) ;
+	/**
+	 * @deprecated misspelled, call {@link #getPermissions()}. Implementations still implement 
+	 * this method in 1.x; it becomes getPermissions() in 2.0.
+	 */
+	@Deprecated
 	List<IPermission> getPermisssions();
+
+	/**
+	 * @return a copy of this principal's permissions
+	 */
+	default List<IPermission> getPermissions() {
+		return getPermisssions();
+	}
 	void setPermissions(List<IPermission> permissions) ;
 
 	

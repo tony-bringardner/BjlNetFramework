@@ -34,9 +34,13 @@ public class VisualCertificateValidator extends BaseObject implements	Certificat
 
 	
 	public ManageAs validate(X509Certificate cert) {
-		CertificateValidotorDialog dialog = new CertificateValidotorDialog();
-		ManageAs ret = dialog.validate(cert);
-		return ret;
+		return validate(cert, null);
+	}
+
+	@Override
+	public ManageAs validate(X509Certificate cert, String host) {
+		CertificateValidatorDialog dialog = new CertificateValidatorDialog();
+		return dialog.validate(cert, host);
 	}
 
 }

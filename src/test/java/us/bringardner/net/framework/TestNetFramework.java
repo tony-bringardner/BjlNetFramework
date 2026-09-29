@@ -44,7 +44,7 @@ import us.bringardner.net.framework.server.IPermission;
 import us.bringardner.net.framework.server.IRequestContext;
 import us.bringardner.net.framework.server.Server;
 
-public class TestNetFramwork {
+public class TestNetFramework {
 
 	public static final String ECHO_COMMAND = "Echo";
 

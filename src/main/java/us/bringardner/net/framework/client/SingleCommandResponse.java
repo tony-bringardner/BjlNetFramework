@@ -56,11 +56,11 @@ public class SingleCommandResponse extends BaseObject implements ICommandRespons
 	}
 
 	public boolean isPositive() {
-		return code >= IGenericResponseCode.REPLY_200_GENERIC_OK && code < IGenericResponseCode.REPLY_300_GENERIC_TEMPOARY_OK; 
+		return code >= IGenericResponseCode.REPLY_200_GENERIC_OK && code < IGenericResponseCode.REPLY_300_GENERIC_TEMPORARY_OK; 
 	}
 
 	public boolean isPositiveIntermediate() {
-		return code >= IGenericResponseCode.REPLY_300_GENERIC_TEMPOARY_OK && code < IGenericResponseCode.REPLY_400_GENERIC_TEMPOARY_ERROR;
+		return code >= IGenericResponseCode.REPLY_300_GENERIC_TEMPORARY_OK && code < IGenericResponseCode.REPLY_400_GENERIC_TEMPORARY_ERROR;
 	}
 
 	public boolean isPositivePreliminary() {
@@ -68,7 +68,7 @@ public class SingleCommandResponse extends BaseObject implements ICommandRespons
 	}
 
 	public boolean isTemporaryError() {
-		return code >= IGenericResponseCode.REPLY_400_GENERIC_TEMPOARY_ERROR && code < IGenericResponseCode.REPLY_500_GENERIC_ERROR;
+		return code >= IGenericResponseCode.REPLY_400_GENERIC_TEMPORARY_ERROR && code < IGenericResponseCode.REPLY_500_GENERIC_ERROR;
 	}
 
 	public void readResonse(ICommandClient client) throws IOException {
@@ -81,7 +81,7 @@ public class SingleCommandResponse extends BaseObject implements ICommandRespons
 			fullResponse.add("500 Response is null");
 		} else {
 			fullResponse.add(response);
-			parseResponseLine(response, client.getSeperator());
+			parseResponseLine(response, client.getSeparator());
 		}
 	}
 

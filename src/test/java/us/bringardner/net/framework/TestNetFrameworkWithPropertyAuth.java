@@ -50,7 +50,7 @@ import us.bringardner.net.framework.server.IServer;
 import us.bringardner.net.framework.server.PropertyAuthenticator;
 import us.bringardner.net.framework.server.Server;
 
-public class TestNetFramworkWithPropertyAuth {
+public class TestNetFrameworkWithPropertyAuth {
 
 	public static final String ECHO_COMMAND = "Echo";
 	public static final String LOGING_COMMAND = "Login";
@@ -99,7 +99,7 @@ public class TestNetFramworkWithPropertyAuth {
 				
 				IPrincipal p = processor.getServer().authenticate(user, password.getBytes());
 				if( p == null ) {
-					processor.reply(REPLY_400_GENERIC_TEMPOARY_ERROR,"User not identified");
+					processor.reply(REPLY_400_GENERIC_TEMPORARY_ERROR,"User not identified");
 					processor.setPrincipal(null);
 				} else {
 					processor.setPrincipal(p);
@@ -144,7 +144,7 @@ public class TestNetFramworkWithPropertyAuth {
 	@AfterEach
 	public void clearProperties() {
 		// System properties are JVM wide, don't leak them into other tests
-		System.clearProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY);
+		System.clearProperty(IServer.AUTHENTICATION_PROVIDER_PROPERTY);
 		System.clearProperty("EchoServer.user0");
 	}
 
@@ -154,7 +154,7 @@ public class TestNetFramworkWithPropertyAuth {
 		// 0 = any free port, so tests don't collide with each other or other programs
 		int port = 0;
 		String serverName = "EchoServer";
-		System.setProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY, PropertyAuthenticator.class.getCanonicalName());
+		System.setProperty(IServer.AUTHENTICATION_PROVIDER_PROPERTY, PropertyAuthenticator.class.getCanonicalName());
 		System.setProperty(serverName+".user0", "echoUser,password,"+ECHO_COMMAND);
 		
 		/**

@@ -3,7 +3,6 @@ package us.bringardner.net.framework;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 
@@ -116,7 +115,7 @@ public class TestSessions {
 	@Test
 	public void testGreetingSentFirst() throws Exception {
 		TestServer greeter = ServerTestSupport.create("GreetingServer", ServerTestSupport.standardCommands(), null);
-		greeter.setServerGreating("220 welcome");
+		greeter.setServerGreeting("220 welcome");
 		ServerTestSupport.start(greeter);
 		try (CommandClient client = ServerTestSupport.connect(greeter)) {
 			assertEquals("220 welcome", client.readLine());
@@ -126,18 +125,8 @@ public class TestSessions {
 		}
 	}
 
-	private static boolean bjlIoSupportsMaxLineLength() {
-		try {
-			Class.forName("us.bringardner.io.AbstractLineReader").getMethod("setMaxLineLength", int.class);
-			return true;
-		} catch (Exception e) {
-			return false;
-		}
-	}
-
 	@Test
 	public void testLineTooLongEndsSession() throws Exception {
-		assumeTrue(bjlIoSupportsMaxLineLength(), "bjl_io on the class path has no line length limit");
 		int saved = Connection.getDefaultMaxLineLength();
 		// Applies to connections created from now on, including the server side one for this client
 		Connection.setDefaultMaxLineLength(100);

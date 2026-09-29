@@ -57,12 +57,12 @@ import us.bringardner.net.framework.server.IPrincipal.State;
 
 public class Server extends AbstractCoreServer implements IServer {
 
-	private static class ImutableFIleBasedPrincipal implements IPrincipal {
+	private static class ImmutablePrincipal implements IPrincipal {
 
 		IPrincipal target ;
 		State state = State.Authenticated;
 		
-		ImutableFIleBasedPrincipal (IPrincipal tmp) {
+		ImmutablePrincipal (IPrincipal tmp) {
 			this.target = tmp;
 		}
 
@@ -109,7 +109,7 @@ public class Server extends AbstractCoreServer implements IServer {
 
 		@Override
 		public List<IPermission> getPermisssions() {			
-			return Collections.unmodifiableList(target.getPermisssions());
+			return Collections.unmodifiableList(target.getPermissions());
 		}
 
 		@Override
@@ -153,13 +153,13 @@ public class Server extends AbstractCoreServer implements IServer {
 	 * 
 	 */
 	protected static final long serialVersionUID = 1L;
-	/** @deprecated not used by the framework */
-	@Deprecated
-	public static final int DEFAULT_BUFFER_SIZE = 1024*1024;
 	public static final int DEFAULT_ACCEPT_TIMEOUT = 5000;
 	public static final int DEFAULT_CONNECTION_TIMEOUT = 60000;
 	//  Max idle connection 24 hr
-	public static final long DEFAULT_MAX_IDEL_CONNECTION = 1000*60*60*24;
+	public static final long DEFAULT_MAX_IDLE_CONNECTION = 1000*60*60*24;
+	/** @deprecated misspelled, use {@link #DEFAULT_MAX_IDLE_CONNECTION} */
+	@Deprecated
+	public static final long DEFAULT_MAX_IDEL_CONNECTION = DEFAULT_MAX_IDLE_CONNECTION;
 	//  Default admin freq = 5min
 	private static final long DEFAULT_ADMIN_REFQ = 1000*60*5;
 	//  Max concurrent clients, 0 = unlimited
@@ -169,7 +169,6 @@ public class Server extends AbstractCoreServer implements IServer {
 	private static int defaultConnectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
 	private static Level defaultLogLevel = Level.NONE;
 
-	private int bufferSize =DEFAULT_BUFFER_SIZE;
 	private int port;
 	private boolean secure = false;
 	private volatile ServerSocketFactory serverSocketFactory;
@@ -177,7 +176,7 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	private IConnectionFactory connectionFactory;
 	private int acceptTimeout     = getDefaultAcceptTimeout();
-	private long maxIdleConnection = DEFAULT_MAX_IDEL_CONNECTION;
+	private long maxIdleConnection = DEFAULT_MAX_IDLE_CONNECTION;
 	private long adminFreq = DEFAULT_ADMIN_REFQ;
 	private long lastAdmin=0;
 
@@ -209,10 +208,28 @@ public class Server extends AbstractCoreServer implements IServer {
 		defaultLogLevel = level;
 	}
 
+	/**
+	 * @return the line sent to each client when it connects, or null for none
+	 */
+	public String getServerGreeting() {
+		return serverGreating;
+	}
+
+	/**
+	 * @param serverGreeting line sent to each client when it connects (e.g. "220 ready"), null for none
+	 */
+	public void setServerGreeting(String serverGreeting) {
+		this.serverGreating = serverGreeting;
+	}
+
+	/** @deprecated misspelled, use {@link #getServerGreeting()} */
+	@Deprecated
 	public String getServerGreating() {
 		return serverGreating;
 	}
 
+	/** @deprecated misspelled, use {@link #setServerGreeting(String)} */
+	@Deprecated
 	public void setServerGreating(String serverGreating) {
 		this.serverGreating = serverGreating;
 	}
@@ -396,18 +413,6 @@ public class Server extends AbstractCoreServer implements IServer {
 		}
 
 		return ret;
-	}
-
-	/** @deprecated not used by the framework */
-	@Deprecated
-	public int getBufferSize() {
-		return bufferSize;
-	}
-
-	/** @deprecated not used by the framework */
-	@Deprecated
-	public void setBufferSize(int bufferSize) {
-		this.bufferSize = bufferSize;
 	}
 
 	public int getPort() {
@@ -895,7 +900,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				// Same work as a real check so timing doesn't reveal valid user names
 				acl.authenticateUnknownUser(credentials);
 			} else if( tmp.authenticate(credentials)) {
-				ret = new ImutableFIleBasedPrincipal(tmp);
+				ret = new ImmutablePrincipal(tmp);
 				ret.setState(State.Authenticated);
 			}
 		}
@@ -927,7 +932,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		if( accessControl == null ) {
 			synchronized (this) {
 				if( accessControl == null ) {
-					String tmp = getProperty(AUTHENTICATOION_PROVIDER_PROPERTY);
+					String tmp = getProperty(AUTHENTICATION_PROVIDER_PROPERTY);
 					if(tmp != null ) {
 						try {
 							Class<?> authClass = Class.forName(tmp);

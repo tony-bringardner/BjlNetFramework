@@ -6,7 +6,7 @@
 	<groupId>us.bringardner</groupId>
 	<artifactId>bjl_net_framework</artifactId>
 	<name>Network Framework</name>
-	<description>A framework for implementating network protocols (FTP, SMTP, POP3, ...)</description>
+	<description>A framework for implementing line based network protocols (FTP, SMTP, POP3, ...), client and server</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -39,6 +39,26 @@
 				</executions>
 			</plugin>
 
+			<!-- Javadoc jar, attached like the sources jar (IDEs show it) -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>3.11.2</version>
+				<configuration>
+					<!-- report missing docs as warnings rather than failing the build -->
+					<doclint>none</doclint>
+					<quiet>true</quiet>
+				</configuration>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
@@ -53,6 +73,7 @@
 				<configuration>
 					<excludes>
 						<!-- Swing dialog, needs a person to click it -->
+						<exclude>**/CertificateValidatorDialog*</exclude>
 						<exclude>**/CertificateValidotorDialog*</exclude>
 						<exclude>**/VisualCertificateValidator*</exclude>
 					</excludes>

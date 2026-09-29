@@ -69,7 +69,7 @@ public class MultiLineCommandResponse extends SingleCommandResponse {
 		}
 		fullResponse.add(first);
 		if( !isContinuation(first)) {
-			parseResponseLine(first, client.getSeperator());
+			parseResponseLine(first, client.getSeparator());
 			return;
 		}
 

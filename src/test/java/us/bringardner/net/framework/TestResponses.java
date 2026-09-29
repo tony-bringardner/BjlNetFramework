@@ -24,7 +24,7 @@ import us.bringardner.net.framework.client.SingleCommandResponse;
 public class TestResponses {
 
 	/** A client whose readLine() returns the given lines, then null (end of stream). */
-	private static ICommandClient stub(String separator, String... lines) {
+	static ICommandClient stub(String separator, String... lines) {
 		Deque<String> queue = new ArrayDeque<>(Arrays.asList(lines));
 		return (ICommandClient) Proxy.newProxyInstance(ICommandClient.class.getClassLoader(),
 				new Class<?>[] {ICommandClient.class}, (proxy, method, args) -> {
@@ -32,6 +32,7 @@ public class TestResponses {
 					case "readLine":
 						return queue.poll();
 					case "getSeperator":
+					case "getSeparator":
 						return separator;
 					default:
 						throw new UnsupportedOperationException(method.getName());
@@ -41,13 +42,13 @@ public class TestResponses {
 
 	private static SingleCommandResponse single(String... lines) throws Exception {
 		SingleCommandResponse ret = new SingleCommandResponse();
-		ret.readResonse(stub(" ", lines));
+		ret.readResponse(stub(" ", lines));
 		return ret;
 	}
 
 	private static MultiLineCommandResponse multi(String... lines) throws Exception {
 		MultiLineCommandResponse ret = new MultiLineCommandResponse();
-		ret.readResonse(stub(" ", lines));
+		ret.readResponse(stub(" ", lines));
 		return ret;
 	}
 
@@ -100,7 +101,7 @@ public class TestResponses {
 	@Test
 	public void testMultiCharacterSeparator() throws Exception {
 		SingleCommandResponse resp = new SingleCommandResponse();
-		resp.readResonse(stub("::", "200::ok::more"));
+		resp.readResponse(stub("::", "200::ok::more"));
 		assertEquals(200, resp.getResponseCode());
 		assertEquals("ok::more", resp.getResponseText());
 	}
@@ -108,7 +109,7 @@ public class TestResponses {
 	@Test
 	public void testNullSeparatorDefaultsToSpace() throws Exception {
 		SingleCommandResponse resp = new SingleCommandResponse();
-		resp.readResonse(stub(null, "200 ok"));
+		resp.readResponse(stub(null, "200 ok"));
 		assertEquals(200, resp.getResponseCode());
 		assertEquals("ok", resp.getResponseText());
 	}
@@ -147,7 +148,7 @@ public class TestResponses {
 		MultiLineCommandResponse resp = new MultiLineCommandResponse();
 		resp.setMaxLines(3);
 		assertEquals(3, resp.getMaxLines());
-		resp.readResonse(stub(" ", "250-a", "250-b", "250-c", "250-d", "250 e"));
+		resp.readResponse(stub(" ", "250-a", "250-b", "250-c", "250-d", "250 e"));
 		assertEquals(500, resp.getResponseCode());
 	}
 

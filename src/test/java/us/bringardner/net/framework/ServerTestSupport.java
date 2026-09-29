@@ -108,7 +108,7 @@ public class ServerTestSupport {
 			IPrincipal principal = p.getServer().authenticate(user, password.getBytes());
 			p.setPrincipal(principal);
 			if( principal == null ) {
-				p.reply(IGenericResponseCode.REPLY_400_GENERIC_TEMPOARY_ERROR, "User not identified");
+				p.reply(IGenericResponseCode.REPLY_400_GENERIC_TEMPORARY_ERROR, "User not identified");
 			} else {
 				p.reply(IGenericResponseCode.REPLY_200_GENERIC_OK, "Ok");
 			}

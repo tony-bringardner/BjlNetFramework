@@ -46,7 +46,10 @@ import us.bringardner.net.framework.IProcessorFactory;
 
 
 public interface IServer extends IManagedThread {
-	public static final String AUTHENTICATOION_PROVIDER_PROPERTY = "AuthenticationProvider";
+	public static final String AUTHENTICATION_PROVIDER_PROPERTY = "AuthenticationProvider";
+	/** @deprecated misspelled, use {@link #AUTHENTICATION_PROVIDER_PROPERTY} (same value) */
+	@Deprecated
+	public static final String AUTHENTICATOION_PROVIDER_PROPERTY = AUTHENTICATION_PROVIDER_PROPERTY;
 	
 	public int getPort();
 	public void setPort(int p);
