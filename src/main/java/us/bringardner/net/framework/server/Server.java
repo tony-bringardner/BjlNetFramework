@@ -33,7 +33,6 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.security.KeyStore;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -177,7 +176,8 @@ public class Server extends AbstractCoreServer implements IServer {
 	private long adminFreq = DEFAULT_ADMIN_REFQ;
 	private long lastAdmin=0;
 
-	private Map<String,Object> runtimeValues = new HashMap<String, Object>();
+	// Shared by all processor threads
+	private volatile Map<String,Object> runtimeValues = new ConcurrentHashMap<String, Object>();
 	// Used by the accept thread, every processor thread and doAdmin(), so it must be thread safe.
 	// Entries are removed explicitly in removeClient() / doAdmin(), so weak keys are not needed.
 	private final Map<Socket, IProcessor> activeClients = new ConcurrentHashMap<Socket, IProcessor>();
@@ -186,7 +186,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	private String serverBusyMessage;
 	private ServerSocket svr = null;
 	private boolean debug;
-	private IAccessControlList accessControl;
+	private volatile IAccessControlList accessControl;
 	private String serverGreating;
 
 
@@ -252,7 +252,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				}
 
 			} catch (Exception e) {
-				e.printStackTrace();
+				logError("Can't create SSL socket factory", e);
 			}
 		} else {
 			ret =  SocketFactory.getDefault();
@@ -264,21 +264,21 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	public SSLContext getSSLContext(String sslOrTls) throws IOException {
 
-		SSLContext ret=null;
-		String tmp = getProtocol();
-
-		try {
-			super.setProtocol(sslOrTls);	
-		} finally {					
-			setProtocol(tmp);
+		String current = getProtocol();
+		if( sslOrTls == null || sslOrTls.equals(current)) {
+			return super.getSSLContext();
 		}
 
-
-		ret =  super.getSSLContext();
-
-
-
-		return ret;
+		// Build the context with the requested protocol, then restore the server's own protocol.
+		// (Previously the protocol was restored before the context was created, so it was ignored.)
+		synchronized (this) {
+			try {
+				super.setProtocol(sslOrTls);
+				return super.getSSLContext();
+			} finally {
+				setProtocol(current);
+			}
+		}
 	}
 
 
@@ -303,7 +303,9 @@ public class Server extends AbstractCoreServer implements IServer {
 				throw new IllegalArgumentException("Key file not found ("+f+")");
 			}
 
-			ks.load(new FileInputStream(f), passphrase);
+			try(FileInputStream in = new FileInputStream(f)) {
+				ks.load(in, passphrase);
+			}
 
 
 			kmf.init(ks, passphrase);
@@ -331,7 +333,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				}
 
 			} catch (Exception e) {
-				e.printStackTrace();
+				logError("Can't create SSL socket factory", e);
 			}
 		} else {
 			ret =  ServerSocketFactory.getDefault();			
@@ -663,20 +665,41 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 
+	/**
+	 * The values are copied into a thread safe map.
+	 */
 	public void setRuntimeValues(Map<String, Object> runtimeValues) {
-		this.runtimeValues = runtimeValues;
+		Map<String, Object> tmp = new ConcurrentHashMap<String, Object>();
+		if( runtimeValues != null ) {
+			for (Map.Entry<String, Object> e : runtimeValues.entrySet()) {
+				if( e.getKey() != null && e.getValue() != null ) {
+					tmp.put(e.getKey(), e.getValue());
+				}
+			}
+		}
+		this.runtimeValues = tmp;
 	}
 
 	public Object getRuntimeValue(String name) {
-		return getRuntimeValues().get(name);
+		return name == null ? null : getRuntimeValues().get(name);
 	}
 
+	/**
+	 * Setting a null value removes the name.
+	 */
 	public void setRuntimeValue(String name, Object value) {
-		getRuntimeValues().put(name, value);
+		if( name == null ) {
+			return;
+		}
+		if( value == null ) {
+			getRuntimeValues().remove(name);
+		} else {
+			getRuntimeValues().put(name, value);
+		}
 	}
 
 	public Object removeRuntimeValue(String name) {
-		return getRuntimeValues().remove(name);
+		return name == null ? null : getRuntimeValues().remove(name);
 	}
 
 	public void removeClient(IProcessor processor) {

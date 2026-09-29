@@ -68,9 +68,11 @@ public abstract class AbstractPrincipal implements IPrincipal {
 
 	@Override
 	public void setParameters(Map<Object, Object> parameters) {
-		parameters.clear();
-		parameters.putAll(parameters);
-		
+		// The argument shadows the field, this previously cleared the caller's map and left ours unchanged.
+		this.parameters.clear();
+		if( parameters != null ) {
+			this.parameters.putAll(parameters);
+		}
 	}
 	
 	@Override

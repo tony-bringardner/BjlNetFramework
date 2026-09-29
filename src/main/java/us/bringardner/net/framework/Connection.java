@@ -31,6 +31,7 @@ import java.net.SocketException;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -87,19 +88,25 @@ public abstract class Connection extends BaseObject implements IConnection {
 	 * @throws IOException
 	 */
 	public void negotiateSecureSocket(String sslOrTsl) throws IOException {
-		if( sslSocket != null ) {
-			sslSocket.close();
-			sslSocket = null;
-		}
-
 		if( sslOrTsl == null ) {
+			// End TLS and go back to the plain socket.
+			if( sslSocket != null ) {
+				try {
+					sslSocket.close();
+				} finally {
+					sslSocket = null;
+					secure = false;
+					configureStreams();
+				}
+			}
 			return;
 		}
-		
-		if( isSecure()) {
+
+		// Check before touching the current socket so a second call can't break a live TLS session.
+		if( isSecure() || sslSocket != null ) {
 			throw new IllegalStateException("Can not negotiate a secure channel from a secure channel.");
 		}
-		
+
 		SSLContext ctx = null;
 		try {
 			ctx = getSSLContext(sslOrTsl);
@@ -110,31 +117,69 @@ public abstract class Connection extends BaseObject implements IConnection {
 				throw new IOException(e);
 			}			
 		}
-		
+		if( ctx == null ) {
+			throw new IOException("No SSLContext available for "+sslOrTsl);
+		}
+
 		SSLSocketFactory factory = ctx.getSocketFactory();
 		//  Any new connections will be secure
 		setSocketFactory(factory);
-		
-		sslSocket = (SSLSocket)factory.createSocket(getSocket(),null, socket.getPort(), false);
+
+		Socket plain = getSocket();
+		boolean clientMode = isClientMode();
+		SSLSocket tmp = (SSLSocket)factory.createSocket(plain, clientMode ? getPeerHost() : null, plain.getPort(), false);
 		// Some clients don;t support v1.3
 		String force = System.getProperty(SecureBaseObject.PROPERTY_FORCE_TLS_VERSION);
 		if( force != null) {
 			force = force.trim();
 			if( !force.isEmpty()) {
-				sslSocket.setEnabledProtocols(new String[] {force});		
+				tmp.setEnabledProtocols(new String[] {force});		
 			}
 		}
-		
-		
-		
-		sslSocket.setWantClientAuth(false);
-		sslSocket.setUseClientMode(false);
-		sslSocket.startHandshake();
+
+		tmp.setUseClientMode(clientMode);
+		if( clientMode ) {
+			configureClientSsl(tmp);
+		} else {
+			tmp.setWantClientAuth(false);
+		}
+		tmp.startHandshake();
+		sslSocket = tmp;
 		secure = true;
-		
+
 		configureStreams();
-		
-		
+	}
+
+	/**
+	 * @return true if this end of the connection is the client (TLS client mode). The server side returns false.
+	 */
+	protected boolean isClientMode() {
+		return false;
+	}
+
+	/**
+	 * @return the host name of the peer, used for TLS SNI and host name verification in client mode.
+	 */
+	protected String getPeerHost() {
+		return null;
+	}
+
+	/**
+	 * @return true if the peer's certificate must match getPeerHost() (client mode only).
+	 */
+	protected boolean isVerifyHostname() {
+		return false;
+	}
+
+	/**
+	 * Apply client side TLS settings before the handshake.
+	 */
+	protected void configureClientSsl(SSLSocket sock) {
+		if( isVerifyHostname() && getPeerHost() != null ) {
+			SSLParameters params = sock.getSSLParameters();
+			params.setEndpointIdentificationAlgorithm("HTTPS");
+			sock.setSSLParameters(params);
+		}
 	}
 	
 	public abstract SSLContext getSSLContext(String sslOrTsl) throws IOException ;

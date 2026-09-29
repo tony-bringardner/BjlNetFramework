@@ -30,13 +30,15 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -47,7 +49,8 @@ import us.bringardner.net.framework.client.DynamicTrustManager.CertificateValida
 
 public class DynamicTrustManager extends BaseObject implements X509TrustManager {
 
-	private static Map<String,String> trusted = new TreeMap<String, String>();
+	// Sorted (like the TreeMap it replaced) and safe to use from several connections at once
+	private static final Map<String,String> trusted = new ConcurrentSkipListMap<String, String>();
 
 	static {
 		BufferedReader in =null;
@@ -76,22 +79,22 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 		}
 	}
 
-	private static void saveTrusted() throws IOException {
-		PrintStream out = null;
-		try {
-			out = new PrintStream(getPersistanceFile());
-		
+	private static synchronized void saveTrusted() throws IOException {
+		// Write a temp file and move it into place so a crash can't leave a truncated file.
+		File target = getPersistanceFile();
+		File tmp = new File(target.getParentFile(), target.getName()+".tmp");
+		try(PrintStream out = new PrintStream(tmp)) {
 			for (Map.Entry<String, String> e : trusted.entrySet()) {
 				out.println(e.getKey()+"~"+e.getValue());
 			}
-			
-		} finally {
-			if( out != null ) {
-				try {
-					out.close();
-				} catch (Exception e) {
-				}
+			if( out.checkError()) {
+				throw new IOException("Error writing "+tmp);
 			}
+		}
+		try {
+			Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+		} catch (IOException e) {
+			Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
 	}
 	
@@ -137,7 +140,8 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 		if( trustManagers == null ) {
 			TrustManagerFactory tmf;
 			try {
-				tmf = TrustManagerFactory.getInstance("SunX509", "SunJSSE");
+				// PKIX on current JVMs, SunX509 skips some certificate checks
+				tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
 				tmf.init((KeyStore)null);
 				trustManagers = tmf.getTrustManagers();
 			} catch (Exception e) {
@@ -177,15 +181,16 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 
 		boolean ok = false;
 
-		for (TrustManager tm : trustManagers) {
+		TrustManager[] managers = trustManagers == null ? new TrustManager[0] : trustManagers;
+		for (TrustManager tm : managers) {
 			if (tm instanceof X509TrustManager) {
 				X509TrustManager x5 = (X509TrustManager) tm;
 				try {
 					x5.checkServerTrusted(chain, authType);
 					ok = true;
 					break;
-				} catch (Throwable e) {
-					System.out.println("e="+e);
+				} catch (CertificateException | RuntimeException e) {
+					logDebug("Not trusted by "+tm+": "+e);
 				}
 			}
 		}
@@ -193,7 +198,7 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 		if( !ok ) {
 
 			String sig = java.util.Base64.getEncoder().encodeToString(chain[0].getSignature()).replaceAll("[\n]","");
-			String name = chain[0].getSubjectDN().getName();
+			String name = chain[0].getSubjectX500Principal().getName();
 			if( trusted.containsKey(sig)) {
 				ok = true;
 			} else {

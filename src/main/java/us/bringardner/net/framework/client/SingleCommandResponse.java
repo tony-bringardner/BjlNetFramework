@@ -81,17 +81,31 @@ public class SingleCommandResponse extends BaseObject implements ICommandRespons
 			fullResponse.add("500 Response is null");
 		} else {
 			fullResponse.add(response);
-			String sep = client.getSeperator();
-			if( sep == null ) {
-				logError("sep = null");
-			}
+			parseResponseLine(response, client.getSeperator());
+		}
+	}
 
-			int idx = response.indexOf(sep);
-			if( idx > 0 ) {
-				text = response.substring(idx+1);
-				response = response.substring(0,idx);
-			}
-			code = translateResponseCode(response);
+	/**
+	 * Split a response line into code and text. A line that doesn't start with a 
+	 * valid code is reported as a 500 with the whole line as the text rather than throwing.
+	 */
+	protected void parseResponseLine(String response, String sep) {
+		if( sep == null || sep.isEmpty()) {
+			sep = " ";
+		}
+
+		String codePart = response;
+		int idx = response.indexOf(sep);
+		if( idx > 0 ) {
+			text = response.substring(idx+sep.length());
+			codePart = response.substring(0,idx);
+		}
+		try {
+			code = translateResponseCode(codePart.trim());
+		} catch (NumberFormatException e) {
+			logError("Invalid response code in '"+response+"'");
+			code = IGenericResponseCode.REPLY_500_GENERIC_ERROR;
+			text = response;
 		}
 	}
 
