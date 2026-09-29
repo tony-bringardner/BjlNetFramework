@@ -2,6 +2,7 @@ package us.bringardner.net.framework.server;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,7 +13,9 @@ import java.util.Map;
 public abstract class AbstractPrincipal implements IPrincipal {
 
 	String name;
-	List<IPermission> permissions = new ArrayList<>();
+	// Keyed by permission name (the same test Permission.equals uses) so lookups are O(1),
+	// duplicates are impossible and remove() really revokes. Insertion order is kept.
+	Map<String,IPermission> permissions = new LinkedHashMap<>();
 	Map<Object,Object> parameters = new HashMap<>();
 	State state= State.Unvalidated;
 	byte [] credentials;
@@ -22,33 +25,38 @@ public abstract class AbstractPrincipal implements IPrincipal {
 		this.name  = name;
 	}
 	
+	private static String key(IPermission permission) {
+		return permission == null ? null : permission.getName();
+	}
+
 	public void add(IPermission permission) {
-		permissions.add(permission);
+		String key = key(permission);
+		if( key != null ) {
+			permissions.putIfAbsent(key, permission);
+		}
 	}
 	
 	public boolean hasPermission(IPermission permision) {
-		for(IPermission p : permissions) {
-			if( p.equals(permision)) {
-				return true;
-			}
-		}
-		
-		return false;
+		String key = key(permision);
+		return key != null && permissions.containsKey(key);
 	}
 	
 	public boolean remove(IPermission permission) {
-		return permissions.remove(permission);
+		String key = key(permission);
+		return key != null && permissions.remove(key) != null;
 	}
 	
 	public List<IPermission> getPermisssions() {
-		List<IPermission> ret = new ArrayList<>();
-		ret.addAll(permissions);		
-		return ret;
+		return new ArrayList<>(permissions.values());
 	}
 	
 	public void setPermissions(List<IPermission> permissions) {
 		this.permissions.clear();
-		this.permissions.addAll(permissions);
+		if( permissions != null ) {
+			for (IPermission p : permissions) {
+				add(p);
+			}
+		}
 	}
 	
 	public Object getParameter(Object key) {
