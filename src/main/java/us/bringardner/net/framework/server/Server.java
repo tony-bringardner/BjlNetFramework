@@ -28,6 +28,7 @@ package us.bringardner.net.framework.server;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -189,6 +190,8 @@ public class Server extends AbstractCoreServer implements IServer {
 	private int maxClients = DEFAULT_MAX_CLIENTS;
 	private String serverBusyMessage;
 	private volatile ServerSocket svr = null;
+	// Why the last start() failed (null if it started or is still starting)
+	private volatile Throwable startupError;
 	private boolean tcpNoDelay = true;
 	private boolean reuseAddress = true;
 	private int backlog = 0;
@@ -247,19 +250,19 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 
+	/**
+	 * @throws IllegalStateException if a secure factory is requested and the SSL context can't be created
+	 * (previously null was returned and the cause only logged).
+	 */
 	public  SocketFactory getSocketFactory(boolean isSecure) {
 		SocketFactory ret = null;
 
 		if (isSecure) {
 			try {
 				// set up key manager to do server authentication
-				SSLContext ctx=getSSLContext();
-				if( ctx != null ) {
-					ret = ctx.getSocketFactory();
-				}
-
+				ret = getSSLContext().getSocketFactory();
 			} catch (Exception e) {
-				logError("Can't create SSL socket factory", e);
+				throw new IllegalStateException("Can't create SSL socket factory for server "+getName()+": "+e.getMessage(), e);
 			}
 		} else {
 			ret =  SocketFactory.getDefault();
@@ -327,6 +330,56 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	}
 
+	/**
+	 * Clears any previous startup error, see {@link #startAndWait(long)}.
+	 */
+	@Override
+	public synchronized void start() {
+		startupError = null;
+		super.start();
+	}
+
+	/**
+	 * Start the server and wait until it is accepting connections.
+	 * Unlike start(), a server that can't start (port in use, bad key store, 
+	 * no factories...) is reported to the caller instead of only being logged.
+	 * 
+	 * @throws IOException with the reason if the server did not start within the timeout
+	 */
+	public void startAndWait(long timeoutMillis) throws IOException {
+		start();
+		long end = System.currentTimeMillis() + timeoutMillis;
+		while( !isRunning() ) {
+			Throwable error = startupError;
+			if( error != null ) {
+				if( error instanceof IOException ) {
+					throw (IOException) error;
+				}
+				throw new IOException("Server "+getName()+" failed to start: "+error.getMessage(), error);
+			}
+			if( System.currentTimeMillis() > end ) {
+				throw new IOException("Server "+getName()+" did not start within "+timeoutMillis+" ms");
+			}
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new InterruptedIOException("Interrupted waiting for server "+getName()+" to start");
+			}
+		}
+	}
+
+	/**
+	 * @return why the last start() failed, or null if it started (or is still starting).
+	 */
+	public Throwable getStartupError() {
+		return startupError;
+	}
+
+	/**
+	 * @throws IllegalStateException if a secure factory is requested and the SSL context can't be created
+	 * (previously null was returned and the cause only logged).
+	 */
 	public ServerSocketFactory getServerSocketFactory(boolean isSecure) 
 	{
 		ServerSocketFactory ret = null;
@@ -334,13 +387,9 @@ public class Server extends AbstractCoreServer implements IServer {
 		if (isSecure) {
 			try {
 				// set up key manager to do server authentication
-				SSLContext ctx=getSSLContext();
-				if( ctx != null ) {
-					ret = ctx.getServerSocketFactory();
-				}
-
+				ret = getSSLContext().getServerSocketFactory();
 			} catch (Exception e) {
-				logError("Can't create SSL socket factory", e);
+				throw new IllegalStateException("Can't create SSL server socket factory for server "+getName()+": "+e.getMessage(), e);
 			}
 		} else {
 			ret =  ServerSocketFactory.getDefault();			
@@ -404,10 +453,12 @@ public class Server extends AbstractCoreServer implements IServer {
 		// 1>  Make sure we have everything we need to run
 		if(getConnectionFactory() == null ) {
 			logError("No connection factory defined.");
+			startupError = new IllegalStateException("No connection factory defined.");
 			return;
 		}
 		if(getProcessorFactory() == null ) {
 			logError("No processor factory defined.");
+			startupError = new IllegalStateException("No processor factory defined.");
 			return;
 		}
 
@@ -416,8 +467,10 @@ public class Server extends AbstractCoreServer implements IServer {
 			try {
 				svr = createServerSocket();
 				svr.setSoTimeout(getAcceptTimeout());
-			} catch (IOException e) {
+			} catch (Exception e) {
+				// e.g. port in use, or (secure) a missing key store or wrong password
 				logError("Can't create ServerSockt",e);
+				startupError = e;
 			}
 		}
 
@@ -560,6 +613,10 @@ public class Server extends AbstractCoreServer implements IServer {
 			}
 
 			IConnection conn = getConnectionFactory().getConnection(socket);
+			if( socket instanceof SSLSocket && !conn.isSecure()) {
+				// TLS from the first byte: commands can see it, and STARTTLS is refused instead of nesting TLS
+				conn.setSecure(true);
+			}
 			// Apply the server read timeout unless the factory already set one.
 			if( conn.getTimeout() <= 0 && getConnectionTimeout() > 0 ) {
 				conn.setTimeout(getConnectionTimeout());
