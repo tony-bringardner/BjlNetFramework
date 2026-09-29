@@ -54,8 +54,6 @@ public class PropertyAuthenticator extends FileBasedAcl  {
 		}
 
 		int idx = 0;
-		System.out.println(
-				);
 		String tmp = getProperty(USER_PROPERTY+idx);
 		while( tmp != null ) {
 			parseLine(tmp);			

@@ -62,6 +62,11 @@ public abstract class Connection extends BaseObject implements IConnection {
 	private boolean useCRLF=true;
 	// Counts as activity so a new connection isn't treated as idle before its first read / write
 	private volatile long connectTime;
+
+	/** Longest line accepted by readLine() (bytes), 0 = unlimited. */
+	public static final int DEFAULT_MAX_LINE_LENGTH = 64*1024;
+	private static volatile int defaultMaxLineLength = DEFAULT_MAX_LINE_LENGTH;
+	private volatile int maxLineLength = defaultMaxLineLength;
 	
 	
 	public Connection(boolean useCRLF) {
@@ -188,14 +193,58 @@ public abstract class Connection extends BaseObject implements IConnection {
 	private void configureStreams() throws IOException {
 		Socket socket = getSocket();
 		
+		ILineReader r;
 		if (useCRLF) {
-			reader = new CRLFLineReader(socket.getInputStream());
+			r = new CRLFLineReader(socket.getInputStream());
 			writer = new CRLFLineWriter(socket.getOutputStream(),outBufSize);
 		} else {
-			reader = new LFLineReader(socket.getInputStream());
+			r = new LFLineReader(socket.getInputStream());
 			writer = new LFLineWriter(socket.getOutputStream(),outBufSize);
 		}
+		applyMaxLineLength(r, maxLineLength);
+		reader = r;
+	}
 
+	public static int getDefaultMaxLineLength() {
+		return defaultMaxLineLength;
+	}
+
+	/**
+	 * Default for new connections, 0 = unlimited.
+	 */
+	public static void setDefaultMaxLineLength(int max) {
+		defaultMaxLineLength = max;
+	}
+
+	public int getMaxLineLength() {
+		return maxLineLength;
+	}
+
+	/**
+	 * Longest line readLine() will accept (bytes, not counting the terminator), 0 = unlimited.
+	 * A longer line throws an IOException (LineTooLongException) which ends a server session.
+	 * Without a limit a client can exhaust memory by sending data with no line terminator.
+	 */
+	public void setMaxLineLength(int max) {
+		maxLineLength = max;
+		ILineReader r = reader;
+		if( r != null ) {
+			applyMaxLineLength(r, max);
+		}
+	}
+
+	/*
+	 * AbstractLineReader.setMaxLineLength was added to bjl_io without a version change, 
+	 * so call it only if the bjl_io on the class path has it.
+	 */
+	private void applyMaxLineLength(ILineReader r, int max) {
+		try {
+			r.getClass().getMethod("setMaxLineLength", int.class).invoke(r, max);
+		} catch (NoSuchMethodException e) {
+			logDebug("This bjl_io version does not support a max line length");
+		} catch (Exception e) {
+			logError("Can't set max line length", e);
+		}
 	}
 
 	public boolean isSecure() {

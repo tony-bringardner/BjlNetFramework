@@ -140,7 +140,8 @@ public class TestNetFramworkWithPropertyAuth {
 	@Test
 	public void testEchoServer() throws IOException {
 
-		int port = 8889;
+		// 0 = any free port, so tests don't collide with each other or other programs
+		int port = 0;
 		String serverName = "EchoServer";
 		System.setProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY, PropertyAuthenticator.class.getCanonicalName());
 		System.setProperty(serverName+".user0", "echoUser,password,"+ECHO_COMMAND);
@@ -198,7 +199,7 @@ public class TestNetFramworkWithPropertyAuth {
 		svr.start();
 		int cnt = 0;
 		// wait for the server to start
-		while( cnt < 5 && !svr.isRunning()) {
+		while( cnt < 50 && !svr.isRunning()) {
 			try {
 				cnt++;
 				Thread.sleep(100);
@@ -216,7 +217,7 @@ public class TestNetFramworkWithPropertyAuth {
 		 * Create s simple client that will send commands to the server and 
 		 * validate the response.
 		 */
-		try(CommandClient client = new CommandClient("localhost",port)){
+		try(CommandClient client = new CommandClient("localhost",svr.getLocalPort())){
 			TestCase.assertTrue("Can't connect to echo server",client.connect()); 
 			
 			ICommandResponse resp = client.executeCommand(LOGING_COMMAND,"echoUser","password");

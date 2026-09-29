@@ -146,10 +146,7 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 		}
 
 		if( isDebug()) {
-			System.out.println(""+cmdUsed.size()+" Server commands used");
-			for(String key : cmdUsed.keySet()) {
-				System.out.println("\t"+key);
-			}
+			logInfo(""+cmdUsed.size()+" Server commands used "+cmdUsed.keySet());
 		}
 	}
 
@@ -161,7 +158,9 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 	 */
 	protected void processLine(String line, Map<String,String> cmdUsed) throws IOException {
 		// Only log the command name, the rest of the line may contain credentials (e.g. PASS)
-		logDebug("Received command="+firstToken(line));
+		if( isDebugEnabled()) {
+			logDebug("Received command="+firstToken(line));
+		}
 		IRequestContext context = getRequestContextFactory().getRequestContext(line);
 
 		ICommand command = getCommandFactory().getCommand(context);

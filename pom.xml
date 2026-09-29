@@ -7,71 +7,61 @@
 	<artifactId>bjl_net_framework</artifactId>
 	<name>Network Framework</name>
 	<description>A framework for implementating network protocols (FTP, SMTP, POP3, ...)</description>
-	
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<!-- release (not source/target) also checks that only Java 11 APIs are used -->
+		<maven.compiler.release>11</maven.compiler.release>
+		<junit5.version>5.11.4</junit5.version>
+	</properties>
+
 	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
+			</plugin>
+
+			<!-- Was only in pluginManagement, so the sources jar was never built -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>3.3.1</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.2</version>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-deploy-plugin</artifactId>
+				<version>3.1.3</version>
+			</plugin>
+		</plugins>
+
 		<pluginManagement>
 			<plugins>
+				<!-- Static analysis, run on demand: mvn compile spotbugs:check -->
 				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-compiler-plugin</artifactId>
-					<version>3.3</version>
+					<groupId>com.github.spotbugs</groupId>
+					<artifactId>spotbugs-maven-plugin</artifactId>
+					<version>4.8.6.6</version>
 					<configuration>
-						<source>11</source>
-						<target>11</target>
-					</configuration>
-				</plugin>
-
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-source-plugin</artifactId>
-					<version>3.1.0</version>
-					<executions>
-						<execution>
-							<id>attach-sources</id>
-							<goals>
-								<goal>jar</goal>
-							</goals>
-						</execution>
-					</executions>
-				</plugin>
-				<plugin>
-					<artifactId>maven-deploy-plugin</artifactId>
-					<version>2.8.2</version>				
-				</plugin>
-				<plugin>
-					<groupId>com.github.github</groupId>
-					<artifactId>site-maven-plugin</artifactId>
-					<version>0.12</version>
-					<configuration>
-						<message>Maven artifacts for ${project.version}</message>
-						<noJekyll>true</noJekyll>
-						<outputDirectory>${project.build.directory}</outputDirectory>
-						<branch>refs/heads/${branch-name}</branch>
-						<includes>
-							<include>**/*</include>
-						</includes>
-						<merge>true</merge>
-						<repositoryName>BjlNetFramework</repositoryName>
-						<repositoryOwner>tony-bringardner</repositoryOwner>
-						<server>github</server>
-					</configuration>
-					<executions>
-						<execution>
-							<goals>
-								<goal>site</goal>
-							</goals>
-							<phase>deploy</phase>
-						</execution>
-					</executions>
-				</plugin>
-
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-surefire-plugin</artifactId>
-					<version>3.5.2</version>
-					<configuration>
-						<test><!-- your test suite class name should be here -->
-						</test>
+						<effort>Max</effort>
+						<threshold>Medium</threshold>
 					</configuration>
 				</plugin>
 			</plugins>
@@ -84,11 +74,21 @@
 			<name>tony-bringardner</name>
 			<url>https://maven.pkg.github.com/tony-bringardner/BjlNetFramework</url>
 		</repository>
-
 	</distributionManagement>
 
-	<dependencies>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.junit</groupId>
+				<artifactId>junit-bom</artifactId>
+				<version>${junit5.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
+	<dependencies>
 		<dependency>
 			<groupId>us.bringardner</groupId>
 			<artifactId>bjl_core</artifactId>
@@ -99,11 +99,22 @@
 			<artifactId>bjl_io</artifactId>
 			<version>0.1.2</version>
 		</dependency>
+
+		<!-- TestFileBasedAcl uses JUnit 5, the other tests JUnit 4 (run by the vintage engine) -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.vintage</groupId>
+			<artifactId>junit-vintage-engine</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.10</version>
-			<type>jar</type>
+			<version>4.13.2</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

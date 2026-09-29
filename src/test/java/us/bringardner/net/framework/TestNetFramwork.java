@@ -50,7 +50,8 @@ public class TestNetFramwork {
 	@Test
 	public void testEchoServer() throws IOException {
 
-		int port = 8888;
+		// 0 = any free port, so tests don't collide with each other or other programs
+		int port = 0;
 
 		/**
 		 * Create a simple server that will echo all commands back to the client.
@@ -129,7 +130,7 @@ public class TestNetFramwork {
 		svr.start();
 		int cnt = 0;
 		// wait for the server to start
-		while( cnt < 5 && !svr.isRunning()) {
+		while( cnt < 50 && !svr.isRunning()) {
 			try {
 				cnt++;
 				Thread.sleep(100);
@@ -147,7 +148,7 @@ public class TestNetFramwork {
 		 * Create s simple client that will send commands to the server and 
 		 * validate the response.
 		 */
-		try(CommandClient client = new CommandClient("localhost",port)){
+		try(CommandClient client = new CommandClient("localhost",svr.getLocalPort())){
 			TestCase.assertTrue("Can't connect to echo server",client.connect());
 			for (int idx = 0; idx < msgs.length; idx++) {
 

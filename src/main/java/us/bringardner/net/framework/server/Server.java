@@ -28,8 +28,10 @@ package us.bringardner.net.framework.server;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.security.KeyStore;
 import java.util.Collections;
@@ -150,6 +152,8 @@ public class Server extends AbstractCoreServer implements IServer {
 	 * 
 	 */
 	protected static final long serialVersionUID = 1L;
+	/** @deprecated not used by the framework */
+	@Deprecated
 	public static final int DEFAULT_BUFFER_SIZE = 1024*1024;
 	public static final int DEFAULT_ACCEPT_TIMEOUT = 5000;
 	public static final int DEFAULT_CONNECTION_TIMEOUT = 60000;
@@ -184,7 +188,10 @@ public class Server extends AbstractCoreServer implements IServer {
 	private int connectionTimeout = getDefaultConnectionTimeout();
 	private int maxClients = DEFAULT_MAX_CLIENTS;
 	private String serverBusyMessage;
-	private ServerSocket svr = null;
+	private volatile ServerSocket svr = null;
+	private boolean tcpNoDelay = true;
+	private boolean reuseAddress = true;
+	private int backlog = 0;
 	private boolean debug;
 	private volatile IAccessControlList accessControl;
 	private String serverGreating;
@@ -342,10 +349,14 @@ public class Server extends AbstractCoreServer implements IServer {
 		return ret;
 	}
 
+	/** @deprecated not used by the framework */
+	@Deprecated
 	public int getBufferSize() {
 		return bufferSize;
 	}
 
+	/** @deprecated not used by the framework */
+	@Deprecated
 	public void setBufferSize(int bufferSize) {
 		this.bufferSize = bufferSize;
 	}
@@ -403,7 +414,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		// 2> Create the server socket
 		if( svr == null ) {
 			try {
-				svr = getServerSocketFactory().createServerSocket(getPort());
+				svr = createServerSocket();
 				svr.setSoTimeout(getAcceptTimeout());
 			} catch (IOException e) {
 				logError("Can't create ServerSockt",e);
@@ -414,7 +425,7 @@ public class Server extends AbstractCoreServer implements IServer {
 			started = running = true;
 			lastAdmin = System.currentTimeMillis();
 
-			logInfo("Server "+getName()+" is running on port "+getPort()+".");
+			logInfo("Server "+getName()+" is running on port "+getLocalPort()+".");
 			while( !stopping ) {
 
 				// 3>  Listen for connections.
@@ -453,6 +464,73 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 	/**
+	 * Create and bind the server socket. SO_REUSEADDR is set before binding 
+	 * so a restart doesn't fail while the old port is in TIME_WAIT.
+	 */
+	protected ServerSocket createServerSocket() throws IOException {
+		ServerSocketFactory factory = getServerSocketFactory();
+		ServerSocket ret;
+		try {
+			ret = factory.createServerSocket();
+		} catch (SocketException e) {
+			// This factory can't create unbound sockets
+			return factory.createServerSocket(getPort(), getBacklog());
+		}
+		try {
+			ret.setReuseAddress(isReuseAddress());
+			ret.bind(new InetSocketAddress(getPort()), getBacklog());
+		} catch (IOException e) {
+			try {
+				ret.close();
+			} catch (Exception e2) {
+			}
+			throw e;
+		}
+		return ret;
+	}
+
+	/**
+	 * @return the port the server is listening on (useful when the port was 0), or -1 if not bound.
+	 */
+	public int getLocalPort() {
+		ServerSocket tmp = svr;
+		return tmp == null ? -1 : tmp.getLocalPort();
+	}
+
+	public boolean isTcpNoDelay() {
+		return tcpNoDelay;
+	}
+
+	/**
+	 * Set TCP_NODELAY on accepted sockets (default true).
+	 */
+	public void setTcpNoDelay(boolean tcpNoDelay) {
+		this.tcpNoDelay = tcpNoDelay;
+	}
+
+	public boolean isReuseAddress() {
+		return reuseAddress;
+	}
+
+	/**
+	 * Set SO_REUSEADDR on the server socket (default true).
+	 */
+	public void setReuseAddress(boolean reuseAddress) {
+		this.reuseAddress = reuseAddress;
+	}
+
+	public int getBacklog() {
+		return backlog;
+	}
+
+	/**
+	 * Pending connection queue length, 0 = JVM default.
+	 */
+	public void setBacklog(int backlog) {
+		this.backlog = backlog;
+	}
+
+	/**
 	 * Hand a newly accepted socket to a processor.
 	 * 
 	 * This runs on the accept thread so it must not block on the network 
@@ -470,6 +548,15 @@ public class Server extends AbstractCoreServer implements IServer {
 				logInfo("Rejecting connection from "+socket+", "+activeClients.size()+" clients active (max="+max+")");
 				rejectBusy(socket);
 				return;
+			}
+
+			if( tcpNoDelay ) {
+				// Request / response protocols: don't let Nagle delay small replies
+				try {
+					socket.setTcpNoDelay(true);
+				} catch (SocketException e) {
+					logDebug("Can't set TCP_NODELAY", e);
+				}
 			}
 
 			IConnection conn = getConnectionFactory().getConnection(socket);

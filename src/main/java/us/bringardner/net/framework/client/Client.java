@@ -54,6 +54,7 @@ public class Client extends Connection implements IClient {
 	private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
 	private volatile boolean trustAllCertificates = false;
 	private volatile boolean verifyHostname = true;
+	private boolean tcpNoDelay = true;
 	
 	public Client(boolean useCRLF) {
 		super(useCRLF);
@@ -148,6 +149,13 @@ public class Client extends Connection implements IClient {
 				configureClientSsl(ssl);
 			}
 			setSecure(implicitTls);
+			if( tcpNoDelay ) {
+				try {
+					sock.setTcpNoDelay(true);
+				} catch (SocketException e) {
+					logDebug("Can't set TCP_NODELAY", e);
+				}
+			}
 			setSocket(sock);
 			connected = true;
 		} catch (IOException e) {
@@ -178,6 +186,17 @@ public class Client extends Connection implements IClient {
 			// A new connect() starts from a plain socket
 			setSecure(false);
 		}
+	}
+
+	public boolean isTcpNoDelay() {
+		return tcpNoDelay;
+	}
+
+	/**
+	 * Set TCP_NODELAY on new connections (default true), avoids Nagle delays on small commands.
+	 */
+	public void setTcpNoDelay(boolean tcpNoDelay) {
+		this.tcpNoDelay = tcpNoDelay;
 	}
 
 	/**

@@ -26,6 +26,8 @@
 package us.bringardner.net.framework.server;
 
 
+import java.util.regex.Pattern;
+
 import us.bringardner.core.BaseObject;
 
 public class DefaultRequestContext extends BaseObject implements IRequestContext {
@@ -104,7 +106,13 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 
 	public String[] getTokens() {
 		if( tokens == null ) {
-			tokens = getCommandLine().split(getSeperator());
+			String sep = getSeperator();
+			// A single character is always literal ("|" or "." would otherwise be regex operators).
+			// Longer separators are still treated as a regex for compatibility.
+			if( sep.length() == 1 ) {
+				sep = Pattern.quote(sep);
+			}
+			tokens = getCommandLine().split(sep);
 		}
 		
 		return tokens;
