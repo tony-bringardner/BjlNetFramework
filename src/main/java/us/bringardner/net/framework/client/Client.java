@@ -50,6 +50,15 @@ public class Client extends Connection implements IClient {
 	public static final int DEFAULT_READ_TIMEOUT = 5*60*1000;
 	private static volatile int defaultReadTimeout = DEFAULT_READ_TIMEOUT;
 
+	/**
+	 * Properties (milliseconds, 0 = no timeout) read when a client is created, see BaseObject.getProperty:
+	 * e.g. -Dus.bringardner.net.framework.client.CommandClient.readTimeout=600000 for one client class,
+	 * -DreadTimeout=600000 for all, or the same names in a class-named .properties file on the class path.
+	 * Calling setTimeout() / setConnectTimeout() afterwards overrides them.
+	 */
+	public static final String PROPERTY_READ_TIMEOUT = "readTimeout";
+	public static final String PROPERTY_CONNECT_TIMEOUT = "connectTimeout";
+
 	private volatile SecureBaseObject context;
 	private int port;
 	private String host;
@@ -62,8 +71,7 @@ public class Client extends Connection implements IClient {
 	
 	public Client(boolean useCRLF) {
 		super(useCRLF);
-		// Without a read timeout a dead server would block readLine() forever. setTimeout(0) restores that.
-		setTimeout(getDefaultReadTimeout());
+		configureTimeouts();
 	}
 	public Client() {
 		this(true);
@@ -76,7 +84,7 @@ public class Client extends Connection implements IClient {
 	
 	public Client(String host, int port, boolean useCRLF) {
 		super(useCRLF);
-		setTimeout(getDefaultReadTimeout());
+		configureTimeouts();
 		setHost(host);
 		setPort(port);
 	}
@@ -197,6 +205,26 @@ public class Client extends Connection implements IClient {
 		}
 	}
 
+	/*
+	 * Without a read timeout a dead server would block readLine() forever. setTimeout(0) restores that.
+	 */
+	private void configureTimeouts() {
+		setTimeout(getConfiguredTimeout(PROPERTY_READ_TIMEOUT, getDefaultReadTimeout()));
+		setConnectTimeout(getConfiguredTimeout(PROPERTY_CONNECT_TIMEOUT, DEFAULT_CONNECT_TIMEOUT));
+	}
+
+	private int getConfiguredTimeout(String name, int defaultValue) {
+		String value = getProperty(name, null);
+		if( value != null ) {
+			try {
+				return Math.max(0, Integer.parseInt(value.trim()));
+			} catch (NumberFormatException e) {
+				logError("Invalid "+name+" '"+value+"', using "+defaultValue);
+			}
+		}
+		return defaultValue;
+	}
+
 	/**
 	 * @return why the last connect() returned false (e.g. ConnectException, UnknownHostException,
 	 * SocketTimeoutException, SSLHandshakeException), or null if it succeeded.
@@ -211,7 +239,7 @@ public class Client extends Connection implements IClient {
 
 	/**
 	 * Read timeout (milliseconds) for clients created after this call, 0 = wait forever.
-	 * Use setTimeout() to change a single client.
+	 * The readTimeout property, if set, takes precedence. Use setTimeout() to change a single client.
 	 */
 	public static void setDefaultReadTimeout(int milliSeconds) {
 		defaultReadTimeout = milliSeconds;
