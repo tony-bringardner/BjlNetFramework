@@ -48,8 +48,9 @@ import us.bringardner.net.framework.server.Server;
 public abstract class Connection extends BaseObject implements IConnection {
 
 	private volatile Socket socket;
-	private ILineReader reader;
-	private ILineWriter writer;
+	// volatile: close() may be called from another thread (e.g. Server.doAdmin) while the processor is reading
+	private volatile ILineReader reader;
+	private volatile ILineWriter writer;
 	private IServer server;
 	private boolean debug;
 	private int timeout;
@@ -58,6 +59,8 @@ public abstract class Connection extends BaseObject implements IConnection {
 	private int outBufSize = 1024*10;
 	private volatile SSLSocket sslSocket;
 	private boolean useCRLF=true;
+	// Counts as activity so a new connection isn't treated as idle before its first read / write
+	private volatile long connectTime;
 	
 	
 	public Connection(boolean useCRLF) {
@@ -208,6 +211,14 @@ public abstract class Connection extends BaseObject implements IConnection {
 			}
 			writer = null;
 		}
+		if( sslSocket != null ) {
+			try {
+				sslSocket.close();
+			} catch (IOException e) {
+				// Ingore error here
+			}
+			sslSocket = null;
+		}
 		if( socket != null ) {
 			try {
 				socket.close();
@@ -216,6 +227,22 @@ public abstract class Connection extends BaseObject implements IConnection {
 			}
 			socket = null;
 		}
+	}
+
+	private ILineReader openReader() throws IOException {
+		ILineReader ret = reader;
+		if( ret == null ) {
+			throw new IOException("Connection is closed");
+		}
+		return ret;
+	}
+
+	private ILineWriter openWriter() throws IOException {
+		ILineWriter ret = writer;
+		if( ret == null ) {
+			throw new IOException("Connection is closed");
+		}
+		return ret;
 	}
 
 
@@ -245,6 +272,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 
 	public void setSocket(Socket socket) throws IOException {
 		this.socket = socket;
+		connectTime = System.currentTimeMillis();
 		try {
 			logDebug("Connection from "+socket);
 			configureStreams();
@@ -261,14 +289,14 @@ public abstract class Connection extends BaseObject implements IConnection {
 	}
 
 	public final String readLine() throws IOException {
-		String ret = reader.readLine();
+		String ret = openReader().readLine();
 		
 		return ret;
 	}
 	
 
 	public final void flush() throws IOException {
-		writer.flush();
+		openWriter().flush();
 	}
 
 	
@@ -282,12 +310,12 @@ public abstract class Connection extends BaseObject implements IConnection {
 	}
 
 	public final void writeLine(String line) throws IOException {
-		writer.writeLine(line);
+		openWriter().writeLine(line);
 		
 	}
 	
 	public final void write(String line) throws IOException {
-		writer.write(line);		
+		openWriter().write(line);		
 	}
 	
 
@@ -300,12 +328,12 @@ public abstract class Connection extends BaseObject implements IConnection {
 	}
 
 	public final int inputAvailable() throws IOException {
-		return reader.inputAvailable();
+		return openReader().inputAvailable();
 	}
 
 	public long getLastReadTime() {
-		
-		return reader.getLastReadTime();
+		ILineReader r = reader;
+		return r == null ? 0 : Math.max(r.getLastReadTime(), connectTime);
 	}
 
 	public long getBytesOut() {
@@ -313,7 +341,8 @@ public abstract class Connection extends BaseObject implements IConnection {
 	}
 
 	public long getLastWriteTime() {
-		return writer.getLastWriteTime();
+		ILineWriter w = writer;
+		return w == null ? 0 : Math.max(w.getLastWriteTime(), connectTime);
 	}
 	
 

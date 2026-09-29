@@ -39,6 +39,7 @@ public abstract class AbstractProcessor extends BaseThread implements IProcessor
 	private IServer server;
 	private Map<String, Object> sessionValues = new HashMap<String, Object>();
 	private IPrincipal principal;
+	private volatile String pendingGreeting;
 	
 	public AbstractProcessor() {
 		getLogger().setLevel(Server.getDefaultLogLevel());
@@ -122,6 +123,23 @@ public abstract class AbstractProcessor extends BaseThread implements IProcessor
 		return getServer().getRuntimeValues();
 	}
 	
+	/**
+	 * Set by the server so the greeting is written from this processor's thread
+	 * rather than the server's accept thread. 
+	 */
+	public void setPendingGreeting(String greeting) {
+		this.pendingGreeting = greeting;
+	}
+
+	/**
+	 * @return the greeting the server asked this processor to send (once), or null.
+	 */
+	protected String takePendingGreeting() {
+		String ret = pendingGreeting;
+		pendingGreeting = null;
+		return ret;
+	}
+
 	public String getThreadName() {
 		return getName();
 	}

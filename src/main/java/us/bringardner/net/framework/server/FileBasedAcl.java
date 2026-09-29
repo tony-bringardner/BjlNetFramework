@@ -24,6 +24,9 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 		@Override
 		public boolean authenticate(byte[] credentials) {
 			byte mine [] = getCredentials();
+			if( mine == null || credentials == null ) {
+				return false;
+			}
 			boolean ret = mine.length == credentials.length;
 			if(ret ) {
 				for (int idx = 0; idx < mine.length; idx++) {
@@ -130,7 +133,7 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 	@Override
 	public boolean checkPermission(IPrincipal user, IPermission action) {
 		boolean ret = false;
-		if( user.getState() == State.Authenticated) {
+		if( user != null && action != null && user.getState() == State.Authenticated) {
 			ret = user.hasPermission(action);
 		}		
 		return ret;

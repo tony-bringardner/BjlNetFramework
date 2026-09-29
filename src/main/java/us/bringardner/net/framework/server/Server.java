@@ -37,12 +37,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.net.ServerSocketFactory;
 import javax.net.SocketFactory;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
 
 import us.bringardner.core.ILogger.Level;
 import us.bringardner.core.util.AbstractCoreServer;
@@ -157,6 +158,8 @@ public class Server extends AbstractCoreServer implements IServer {
 	public static final long DEFAULT_MAX_IDEL_CONNECTION = 1000*60*60*24;
 	//  Default admin freq = 5min
 	private static final long DEFAULT_ADMIN_REFQ = 1000*60*5;
+	//  Max concurrent clients, 0 = unlimited
+	public static final int DEFAULT_MAX_CLIENTS = 0;
 
 	private static int defaultAcceptTimeout = DEFAULT_ACCEPT_TIMEOUT;
 	private static int defaultConnectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
@@ -175,7 +178,12 @@ public class Server extends AbstractCoreServer implements IServer {
 	private long lastAdmin=0;
 
 	private Map<String,Object> runtimeValues = new HashMap<String, Object>();
-	private Map<Socket, IProcessor> activeClients = new WeakHashMap<Socket, IProcessor>();
+	// Used by the accept thread, every processor thread and doAdmin(), so it must be thread safe.
+	// Entries are removed explicitly in removeClient() / doAdmin(), so weak keys are not needed.
+	private final Map<Socket, IProcessor> activeClients = new ConcurrentHashMap<Socket, IProcessor>();
+	private int connectionTimeout = getDefaultConnectionTimeout();
+	private int maxClients = DEFAULT_MAX_CLIENTS;
+	private String serverBusyMessage;
 	private ServerSocket svr = null;
 	private boolean debug;
 	private IAccessControlList accessControl;
@@ -408,43 +416,30 @@ public class Server extends AbstractCoreServer implements IServer {
 			while( !stopping ) {
 
 				// 3>  Listen for connections.
-				Socket socket;
+				Socket socket = null;
 				try {
 					socket = svr.accept();
-
-					if( socket != null ) {
-						logDebug("Incomming conenction from "+socket);
-						//  Start the processing
-						IConnection conn = null;
-						conn = getConnectionFactory().getConnection(socket);
-
-						try {
-
-							if( serverGreating != null && !serverGreating.isEmpty()) {
-								conn.writeLine(serverGreating);
-							}
-							IProcessor proc = getProcessor();
-							proc.setConnection(conn);
-							activeClients.put(socket,proc);
-							proc.start();
-
-						} catch (InstantiationException e) {
-							logError("Can't create Processor", e);
-						} catch (IllegalAccessException e) {
-							logError("Can't create Processor", e);
-						}
-					}
-					if( (System.currentTimeMillis()-lastAdmin) > adminFreq) {
-						doAdmin();
-					}
-
 				} catch (SocketTimeoutException e) {
 					// Ignore these
 				} catch (IOException e) {
-					// Report the error
+					if( stopping ) {
+						break;
+					}
 					logError("Error in server run",e);
+					if( svr.isClosed() ) {
+						// Nothing more can be accepted, don't spin on the same error.
+						break;
+					}
 				}
 
+				if( socket != null ) {
+					handleNewConnection(socket);
+				}
+
+				// Runs even when accept() times out so idle connections are reaped on a quiet server.
+				if( (System.currentTimeMillis()-lastAdmin) > adminFreq) {
+					doAdmin();
+				}
 			}
 
 			//  We're done so close the serverSocket and exit.
@@ -455,6 +450,92 @@ public class Server extends AbstractCoreServer implements IServer {
 		logInfo("Server "+getName()+" has stopped.");
 	}
 
+	/**
+	 * Hand a newly accepted socket to a processor.
+	 * 
+	 * This runs on the accept thread so it must not block on the network 
+	 * (no greeting writes, no TLS handshakes) and must never throw. 
+	 * If the hand off fails for any reason the socket is closed.
+	 * 
+	 * @param socket
+	 */
+	protected void handleNewConnection(Socket socket) {
+		logDebug("Incomming conenction from "+socket);
+		boolean handedOff = false;
+		try {
+			int max = getMaxClients();
+			if( max > 0 && activeClients.size() >= max ) {
+				logInfo("Rejecting connection from "+socket+", "+activeClients.size()+" clients active (max="+max+")");
+				rejectBusy(socket);
+				return;
+			}
+
+			IConnection conn = getConnectionFactory().getConnection(socket);
+			// Apply the server read timeout unless the factory already set one.
+			if( conn.getTimeout() <= 0 && getConnectionTimeout() > 0 ) {
+				conn.setTimeout(getConnectionTimeout());
+			}
+
+			IProcessor proc = getProcessor();
+			proc.setConnection(conn);
+
+			if( serverGreating != null && !serverGreating.isEmpty()) {
+				if( proc instanceof AbstractProcessor ) {
+					// Sent from the processor's own thread so a slow client or a TLS handshake can't stall accept().
+					((AbstractProcessor) proc).setPendingGreeting(serverGreating);
+				} else {
+					// Legacy behavior for IProcessor implementations that don't extend AbstractProcessor.
+					conn.writeLine(serverGreating);
+				}
+			}
+
+			activeClients.put(socket,proc);
+			proc.start();
+			handedOff = true;
+		} catch (Exception e) {
+			logError("Can't start processor for "+socket, e);
+		} finally {
+			if( !handedOff ) {
+				activeClients.remove(socket);
+				closeQuietly(socket);
+			}
+		}
+	}
+
+	/**
+	 * Called when max clients has been reached. The socket is closed by the caller.
+	 * A busy message is only written to plain sockets, writing to an SSL socket 
+	 * would start a handshake on the accept thread. 
+	 */
+	protected void rejectBusy(Socket socket) {
+		String msg = getServerBusyMessage();
+		if( msg != null && !msg.isEmpty() && !(socket instanceof SSLSocket)) {
+			try {
+				socket.getOutputStream().write((msg+"\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+				socket.getOutputStream().flush();
+			} catch (Exception e) {
+				// Ignore, we're closing it anyway
+			}
+		}
+	}
+
+	private static void closeQuietly(Socket socket) {
+		if( socket != null ) {
+			try {
+				socket.close();
+			} catch (Exception e) {
+			}
+		}
+	}
+
+	private static void closeQuietly(IConnection con) {
+		if( con != null ) {
+			try {
+				con.close();
+			} catch (Exception e) {
+			}
+		}
+	}
 
 	/**
 	 * Close all in process clients
@@ -462,16 +543,11 @@ public class Server extends AbstractCoreServer implements IServer {
 	 * @param svr
 	 */
 	private void close(ServerSocket svr) {
-		Map<Socket, IProcessor> clients = getActiveClients();
-		for (Socket sock : clients.keySet()) {
-			IProcessor element = (IProcessor) clients.get(sock);
-			IConnection con = element.getConnection();
-			try {
-				con.close();
-			} catch (Exception e) {
-			}
+		for (IProcessor element : activeClients.values()) {
+			closeQuietly(element.getConnection());
 		}
-		
+		activeClients.clear();
+
 		try {
 			svr.close();
 		} catch (Exception e) {
@@ -481,25 +557,27 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	protected void doAdmin() {
 		//  Check for idle connections
-		try {
-			Map<Socket, IProcessor> clients = getActiveClients();
-			lastAdmin = System.currentTimeMillis();
-			for (Iterator<Socket> it = clients.keySet().iterator(); it.hasNext();) {
-				Socket sock = (Socket) it.next();
-				IProcessor element = (IProcessor) clients.get(sock);
-				IConnection con = element.getConnection();
-				if((lastAdmin-con.getLastReadTime()) > maxIdleConnection  && (lastAdmin-con.getLastWriteTime()) > maxIdleConnection) {
+		lastAdmin = System.currentTimeMillis();
+		for (Iterator<Map.Entry<Socket, IProcessor>> it = activeClients.entrySet().iterator(); it.hasNext();) {
+			Map.Entry<Socket, IProcessor> entry = it.next();
+			try {
+				IConnection con = entry.getValue().getConnection();
+				Socket sock = con == null ? null : con.getSocket();
+				if( sock == null || sock.isClosed() ) {
+					// Already closed, the processor is exiting or failed to remove itself.
 					it.remove();
-					try {
-						con.close();	
-					} catch (Throwable e) {
-					}									
+				} else if((lastAdmin-con.getLastReadTime()) > maxIdleConnection  && (lastAdmin-con.getLastWriteTime()) > maxIdleConnection) {
+					logDebug("Closing idle connection "+sock);
+					it.remove();
+					closeQuietly(con);
 				}
+			} catch (Throwable e) {
+				// One bad entry must not stop the idle check for everyone else.
+				logDebug("Error in doAdmin for "+entry.getKey(), e);
+				it.remove();
+				closeQuietly(entry.getValue().getConnection());
 			}
-		} catch (Throwable e) {
-			logDebug("Error in doAdmin", e);
 		}
-
 	}
 
 	public IProcessor getProcessor() throws InstantiationException, IllegalAccessException {
@@ -517,6 +595,49 @@ public class Server extends AbstractCoreServer implements IServer {
 	public void setAcceptTimeout(int milliSeconds) {
 		acceptTimeout = milliSeconds;
 
+	}
+
+	/**
+	 * Read timeout (SO_TIMEOUT) applied to each accepted connection 
+	 * unless the connection factory already set one. 0 = wait forever.
+	 */
+	public int getConnectionTimeout() {
+		return connectionTimeout;
+	}
+
+	public void setConnectionTimeout(int milliSeconds) {
+		this.connectionTimeout = milliSeconds;
+	}
+
+	/**
+	 * Maximum number of concurrent clients, 0 = unlimited.
+	 */
+	public int getMaxClients() {
+		return maxClients;
+	}
+
+	public void setMaxClients(int maxClients) {
+		this.maxClients = maxClients;
+	}
+
+	/**
+	 * Optional line sent to clients rejected because max clients has been reached 
+	 * (plain sockets only), e.g. "421 Too many connections".
+	 */
+	public String getServerBusyMessage() {
+		return serverBusyMessage;
+	}
+
+	public void setServerBusyMessage(String serverBusyMessage) {
+		this.serverBusyMessage = serverBusyMessage;
+	}
+
+	public long getMaxIdleConnection() {
+		return maxIdleConnection;
+	}
+
+	public void setMaxIdleConnection(long milliSeconds) {
+		this.maxIdleConnection = milliSeconds;
 	}
 
 
@@ -559,13 +680,20 @@ public class Server extends AbstractCoreServer implements IServer {
 	}
 
 	public void removeClient(IProcessor processor) {
+		if( processor == null ) {
+			return;
+		}
+		// Fast path, the connection's current socket is usually the key.
 		IConnection con = processor.getConnection();
 		if( con != null ) {
 			Socket sock = con.getSocket();
-			if( sock != null ) {
-				activeClients.remove(sock);
+			if( sock != null && activeClients.remove(sock, processor)) {
+				return;
 			}
-		}		
+		}
+		// The socket may have been replaced (e.g. after negotiateSecureSocket) or 
+		// already cleared by close(), so fall back to removing by value.
+		activeClients.values().removeIf(p -> p == processor);
 	}
 
 	public Map<Socket, IProcessor> getActiveClients() {
@@ -610,6 +738,10 @@ public class Server extends AbstractCoreServer implements IServer {
 	 */
 	public boolean isAuthorized(IPrincipal user, IPermission action) {
 		boolean ret = false;
+		if( user == null ) {
+			// Not logged in
+			return false;
+		}
 		IAccessControlList acl = getAccessControl();
 		if( acl != null ) {
 			ret = acl.checkPermission(user, action);

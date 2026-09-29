@@ -80,56 +80,63 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 		IConnection con = getConnection();
 		running = true;
 		Map<String,String> cmdUsed = new TreeMap<String, String>();
-		
-		while(running &&  !stopping ) {
+
+		// Greeting is sent here (not on the server accept thread) so a slow client 
+		// or TLS handshake only blocks this processor.
+		String greeting = takePendingGreeting();
+		if( greeting != null ) {
 			try {
-				String line = con.readLine();
-				if( line == null ) {
-					logDebug("read null??? EOF reached? Connection must be closed by client or network stack error.");
-					stop();
-				} else {
-					logDebug("Received line="+line);
-					IRequestContext context = getRequestContextFactory().getRequestContext(line);
-					
-					ICommand command = getCommandFactory().getCommand(context);
-					if( command == null ) {
-						reply(IGenericResponseCode.REPLY_500_GENERIC_ERROR, "Not a valid command ("+line+").");
-					} else {
-						/*
-						 * Once we have a command it's pretty simple
-						 * 1>  Make sure the command is authorized.
-						 * 2>  Execute the command.
-						 */
-						if( isDebug()) {
-							cmdUsed.put(command.getName(), command.getName());
-						}
-						if(!command.requiresAuthorization() 
-								|| 
-								isAuthorized(command.getPermission()) 
-								){
-							command.execute(this,context);
-						} else {
-							
-							// Authorized 
-							reply(IGenericResponseCode.REPLY_500_GENERIC_ERROR, command.getName()+" not authorized");
-						}
-					}
-				}
-			} catch(SocketTimeoutException e) {
-				//  We'll ignore these.  May not want to do this in all cases.
-			} catch(Throwable e) {
-				if(! e.toString().toLowerCase().contains("close")) {
-					logError("Error in run",e);
-				}
-				
-				try {
-					reply(REPLY_500_GENERIC_ERROR, "An error occured processing the request. Error ="+e);
-				} catch(Throwable ex) {
-				}
+				reply(greeting);
+			} catch (IOException e) {
+				logDebug("Can't send greeting, closing connection", e);
 				stop();
 			}
 		}
-		
+
+		while(running &&  !stopping ) {
+			String line = null;
+			try {
+				line = con.readLine();
+			} catch(SocketTimeoutException e) {
+				//  Idle, keep waiting. Server.doAdmin closes connections that are idle too long.
+				continue;
+			} catch(IOException e) {
+				if( !isClosed(con) && !stopping ) {
+					logError("Error reading request",e);
+				}
+				break;
+			}
+
+			if( line == null ) {
+				logDebug("read null??? EOF reached? Connection must be closed by client or network stack error.");
+				break;
+			}
+
+			try {
+				processLine(line, cmdUsed);
+			} catch(IOException e) {
+				//  Can't talk to the client any more
+				if( !isClosed(con) && !stopping ) {
+					logError("I/O error processing request",e);
+				}
+				break;
+			} catch(RuntimeException e) {
+				//  A failed command should not end the session
+				logError("Error processing command "+firstToken(line),e);
+				try {
+					reply(REPLY_500_GENERIC_ERROR, "An error occured processing the request.");
+				} catch(IOException ex) {
+					break;
+				}
+			} catch(Error e) {
+				logError("Fatal error in processor",e);
+				break;
+			}
+		}
+
+		if( !stopping ) {
+			stop();
+		}
 		running = false;
 		getServer().removeClient(this);
 		try {
@@ -137,7 +144,7 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 		} catch (IOException e) {
 			logError("error on close", e);
 		}
-		
+
 		if( isDebug()) {
 			System.out.println(""+cmdUsed.size()+" Server commands used");
 			for(String key : cmdUsed.keySet()) {
@@ -146,7 +153,48 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 		}
 	}
 
-	
+	/**
+	 * Parse and execute a single request line.
+	 * 
+	 * @throws IOException if the connection can no longer be used, this ends the session. 
+	 * Any RuntimeException is reported to the client as a 500 and the session continues.
+	 */
+	protected void processLine(String line, Map<String,String> cmdUsed) throws IOException {
+		// Only log the command name, the rest of the line may contain credentials (e.g. PASS)
+		logDebug("Received command="+firstToken(line));
+		IRequestContext context = getRequestContextFactory().getRequestContext(line);
+
+		ICommand command = getCommandFactory().getCommand(context);
+		if( command == null ) {
+			reply(IGenericResponseCode.REPLY_500_GENERIC_ERROR, "Not a valid command ("+line+").");
+		} else {
+			if( isDebug()) {
+				cmdUsed.put(command.getName(), command.getName());
+			}
+			if(!command.requiresAuthorization() 
+					|| 
+					isAuthorized(command.getPermission()) 
+					){
+				command.execute(this,context);
+			} else {
+				reply(IGenericResponseCode.REPLY_500_GENERIC_ERROR, command.getName()+" not authorized");
+			}
+		}
+	}
+
+	private static String firstToken(String line) {
+		if( line == null ) {
+			return null;
+		}
+		String tmp = line.trim();
+		int idx = tmp.indexOf(' ');
+		return idx > 0 ? tmp.substring(0, idx) : tmp;
+	}
+
+	private static boolean isClosed(IConnection con) {
+		java.net.Socket sock = con.getSocket();
+		return sock == null || sock.isClosed();
+	}
 
 	public void reply(int responseCode, String text) throws IOException {
 		reply(translateResponseCode(responseCode)+" "+text);
