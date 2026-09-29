@@ -26,6 +26,9 @@
 package us.bringardner.net.framework.server;
 
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import us.bringardner.core.BaseObject;
@@ -38,6 +41,8 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 	
 	private String commandLine;
 	private String [] tokens;
+	// Offset of each token in the command line, used by getRemainingTokens()
+	private int [] starts;
 	private String seperator =getDefaultSeperator();
 	private int pos=0;
 	
@@ -82,21 +87,19 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 		return ret;
 	}
 
+	/**
+	 * @return the rest of the command line, starting at the next token, exactly as it was received
+	 * (spacing and trailing separators are kept), or null if there are no more tokens. 
+	 * All tokens are consumed.
+	 */
 	public String getRemainingTokens() {
 		String ret = null;
 		
 		if( hasNext() ) {
-			StringBuffer buf = new StringBuffer();
-			while( hasNext() ) {
-				if( buf.length() > 0 ) {
-					buf.append(seperator);
-				}
-				buf.append(getNextToken());
-			}
-			ret = buf.toString();
+			ret = getCommandLine().substring(starts[pos]);
+			pos = tokens.length;
 		}
 
-		
 		return ret;
 	}
 
@@ -112,10 +115,50 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 			if( sep.length() == 1 ) {
 				sep = Pattern.quote(sep);
 			}
-			tokens = getCommandLine().split(sep);
+			tokenize(getCommandLine(), Pattern.compile(sep));
 		}
 		
 		return tokens;
+	}
+
+	/*
+	 * Same result as String.split(regex) but also records where each token starts.
+	 */
+	private void tokenize(String line, Pattern pattern) {
+		List<String> list = new ArrayList<String>();
+		List<Integer> offsets = new ArrayList<Integer>();
+		int index = 0;
+		Matcher m = pattern.matcher(line);
+		while( m.find() ) {
+			if( index == 0 && m.start() == 0 && m.start() == m.end()) {
+				// no empty leading token for a zero width match at the beginning
+				continue;
+			}
+			list.add(line.substring(index, m.start()));
+			offsets.add(index);
+			index = m.end();
+		}
+		list.add(line.substring(index));
+		offsets.add(index);
+
+		// Like split(), drop trailing empty tokens (but keep a single empty token for an empty line)
+		int size = list.size();
+		while( size > 1 && list.get(size-1).isEmpty()) {
+			size--;
+		}
+		if( size == 1 && list.get(0).isEmpty() && index > 0 ) {
+			// The line was nothing but separators
+			size = 0;
+		}
+
+		String [] t = new String[size];
+		int [] o = new int[size];
+		for (int idx = 0; idx < size; idx++) {
+			t[idx] = list.get(idx);
+			o[idx] = offsets.get(idx);
+		}
+		starts = o;
+		tokens = t;
 	}
 
 	public boolean hasNext() {
@@ -137,11 +180,19 @@ public class DefaultRequestContext extends BaseObject implements IRequestContext
 
 	public void setSeperator(String seperator) {
 		this.seperator = seperator;
+		reset();
 	}
 
 	public void setCommandLine(String commandLine) {
 		this.commandLine = commandLine;
-		
+		reset();
+	}
+
+	// Tokens were cached, so changing the line or separator previously had no effect once parsed.
+	private void reset() {
+		tokens = null;
+		starts = null;
+		pos = 0;
 	}
 
 }

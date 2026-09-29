@@ -119,6 +119,8 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 	}
 
 	private Map<String , IPrincipal> users = new HashMap<>();
+	private volatile boolean hasHashedPasswords = false;
+	private static volatile String dummyHash;
 
 	public FileBasedAcl() {
 		super();					
@@ -183,6 +185,9 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 		FileBasedPrincipal p = new FileBasedPrincipal(parts[0].trim());
 		//user1  , password   , one|two|three|four|five, key=val|key=val
 		p.setCredentials(parts[1].trim().getBytes(StandardCharsets.UTF_8));
+		if( parts[1].trim().startsWith(HASH_PREFIX)) {
+			hasHashedPasswords = true;
+		}
 		users.put(p.getName(),p);
 		if( parts.length> 2) {
 			if( !parts[2].isEmpty()) {
@@ -217,6 +222,19 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 		return ret;
 	}
 
+
+	@Override
+	public void authenticateUnknownUser(byte[] credentials) {
+		// Plain text compares take no measurable time, only hashed passwords need matching work.
+		if( hasHashedPasswords ) {
+			String hash = dummyHash;
+			if( hash == null ) {
+				hash = dummyHash = hashPassword("not a real password".toCharArray());
+			}
+			char [] pw = credentials == null ? new char[0] : new String(credentials, StandardCharsets.UTF_8).toCharArray();
+			verifyPassword(pw, hash);
+		}
+	}
 
 	@Override
 	public IPrincipal getPrincipal(String user) {

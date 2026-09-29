@@ -834,7 +834,10 @@ public class Server extends AbstractCoreServer implements IServer {
 		IAccessControlList acl = getAccessControl();
 		if(acl != null ) {
 			IPrincipal tmp = acl.getPrincipal(user);
-			if( tmp !=null && tmp.authenticate(credentials)) {
+			if( tmp == null ) {
+				// Same work as a real check so timing doesn't reveal valid user names
+				acl.authenticateUnknownUser(credentials);
+			} else if( tmp.authenticate(credentials)) {
 				ret = new ImutableFIleBasedPrincipal(tmp);
 				ret.setState(State.Authenticated);
 			}

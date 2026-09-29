@@ -46,6 +46,9 @@ import us.bringardner.net.framework.Connection;
 public class Client extends Connection implements IClient {
 
 	public static final int DEFAULT_CONNECT_TIMEOUT = 30000;
+	/** Default read timeout for new clients: 5 minutes, generous so slow commands still complete. */
+	public static final int DEFAULT_READ_TIMEOUT = 5*60*1000;
+	private static volatile int defaultReadTimeout = DEFAULT_READ_TIMEOUT;
 
 	private volatile SecureBaseObject context;
 	private int port;
@@ -55,9 +58,12 @@ public class Client extends Connection implements IClient {
 	private volatile boolean trustAllCertificates = false;
 	private volatile boolean verifyHostname = true;
 	private boolean tcpNoDelay = true;
+	private volatile IOException lastConnectError;
 	
 	public Client(boolean useCRLF) {
 		super(useCRLF);
+		// Without a read timeout a dead server would block readLine() forever. setTimeout(0) restores that.
+		setTimeout(getDefaultReadTimeout());
 	}
 	public Client() {
 		this(true);
@@ -70,6 +76,7 @@ public class Client extends Connection implements IClient {
 	
 	public Client(String host, int port, boolean useCRLF) {
 		super(useCRLF);
+		setTimeout(getDefaultReadTimeout());
 		setHost(host);
 		setPort(port);
 	}
@@ -126,6 +133,7 @@ public class Client extends Connection implements IClient {
 			close();
 		}
 
+		lastConnectError = null;
 		Socket sock = null;
 		try {
 			try {
@@ -160,6 +168,7 @@ public class Client extends Connection implements IClient {
 			connected = true;
 		} catch (IOException e) {
 			logError("Can't Connect to "+getHost()+":"+getPort(),e);
+			lastConnectError = e;
 			closeQuietly(sock);
 		}
 
@@ -186,6 +195,26 @@ public class Client extends Connection implements IClient {
 			// A new connect() starts from a plain socket
 			setSecure(false);
 		}
+	}
+
+	/**
+	 * @return why the last connect() returned false (e.g. ConnectException, UnknownHostException,
+	 * SocketTimeoutException, SSLHandshakeException), or null if it succeeded.
+	 */
+	public IOException getLastConnectError() {
+		return lastConnectError;
+	}
+
+	public static int getDefaultReadTimeout() {
+		return defaultReadTimeout;
+	}
+
+	/**
+	 * Read timeout (milliseconds) for clients created after this call, 0 = wait forever.
+	 * Use setTimeout() to change a single client.
+	 */
+	public static void setDefaultReadTimeout(int milliSeconds) {
+		defaultReadTimeout = milliSeconds;
 	}
 
 	public boolean isTcpNoDelay() {

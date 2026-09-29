@@ -60,4 +60,12 @@ public interface IAccessControlList {
 	 */
 	IPrincipal getPrincipal(String user);
 
+	/**
+	 * Called when a login names a user that doesn't exist. Implementations that 
+	 * hash passwords should do equivalent work here so the response time doesn't
+	 * reveal which user names are valid. 
+	 */
+	default void authenticateUnknownUser(byte[] credentials) {
+	}
+
 }
