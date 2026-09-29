@@ -121,12 +121,12 @@
 		<dependency>
 			<groupId>us.bringardner</groupId>
 			<artifactId>bjl_core</artifactId>
-			<version>0.1.2</version>
+			<version>1.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>us.bringardner</groupId>
 			<artifactId>bjl_io</artifactId>
-			<version>0.1.2</version>
+			<version>1.0.0</version>
 		</dependency>
 
 		<dependency>
