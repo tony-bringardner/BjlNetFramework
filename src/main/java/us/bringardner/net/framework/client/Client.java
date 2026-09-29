@@ -32,6 +32,7 @@ import java.net.SocketException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
+import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
@@ -68,6 +69,10 @@ public class Client extends Connection implements IClient {
 	private volatile boolean verifyHostname = true;
 	private boolean tcpNoDelay = true;
 	private volatile IOException lastConnectError;
+	// The factory in use before negotiateSecureSocket switched to TLS. connect() goes back to it,
+	// the server expects a plain connection first.
+	private volatile SocketFactory connectSocketFactory;
+	private boolean negotiating;
 	
 	public Client(boolean useCRLF) {
 		super(useCRLF);
@@ -140,6 +145,8 @@ public class Client extends Connection implements IClient {
 			// Don't leak the previous socket
 			close();
 		}
+		// A new connection starts plain even if the last one switched to TLS
+		restoreConnectSocketFactory();
 
 		lastConnectError = null;
 		Socket sock = null;
@@ -293,6 +300,46 @@ public class Client extends Connection implements IClient {
 
 	public void setVerifyHostname(boolean verifyHostname) {
 		this.verifyHostname = verifyHostname;
+	}
+
+	/**
+	 * Setting a factory explicitly replaces the one connect() would otherwise go back to.
+	 */
+	@Override
+	public void setSocketFactory(SocketFactory socketFactory) {
+		super.setSocketFactory(socketFactory);
+		if( !negotiating ) {
+			connectSocketFactory = null;
+		}
+	}
+
+	/**
+	 * After a successful switch to TLS getSocketFactory() returns the TLS factory 
+	 * (for secondary connections), but connect() still uses the factory from before the switch.
+	 * Passing null ends TLS and restores that factory.
+	 */
+	@Override
+	public synchronized void negotiateSecureSocket(String sslOrTsl) throws IOException {
+		SocketFactory before = getSocketFactory();
+		negotiating = true;
+		try {
+			super.negotiateSecureSocket(sslOrTsl);
+		} finally {
+			negotiating = false;
+		}
+		if( sslOrTsl == null ) {
+			restoreConnectSocketFactory();
+		} else if( connectSocketFactory == null && before != getSocketFactory()) {
+			connectSocketFactory = before;
+		}
+	}
+
+	private void restoreConnectSocketFactory() {
+		SocketFactory tmp = connectSocketFactory;
+		if( tmp != null ) {
+			connectSocketFactory = null;
+			super.setSocketFactory(tmp);
+		}
 	}
 
 	@Override

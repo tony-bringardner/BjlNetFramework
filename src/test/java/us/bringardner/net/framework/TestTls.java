@@ -9,7 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 
 import org.junit.jupiter.api.AfterAll;
@@ -174,6 +176,39 @@ public class TestTls {
 			assertThrows(IllegalStateException.class, () -> client.negotiateSecureSocket("TLS"));
 			// the live TLS session is untouched
 			assertEcho(client, "still secure");
+		}
+	}
+
+	@Test
+	public void testReconnectAfterTlsStartsPlain() throws Exception {
+		try (CommandClient client = ServerTestSupport.connect(svr)) {
+			client.setTrustAllCertificates(true);
+			startTls(client);
+			// Secondary connections would use TLS
+			assertTrue(client.getSocketFactory() instanceof SSLSocketFactory);
+
+			assertTrue(client.connect(), "reconnect failed: " + client.getLastConnectError());
+			assertFalse(client.isSecure());
+			assertFalse(client.getSocket() instanceof SSLSocket);
+			assertEcho(client, "plain again");
+
+			// and TLS can be negotiated again on the new connection
+			startTls(client);
+			assertEcho(client, "secure again");
+		}
+	}
+
+	@Test
+	public void testFailedNegotiationKeepsSocketFactory() throws Exception {
+		try (CommandClient client = ServerTestSupport.connect(svr)) {
+			SocketFactory before = client.getSocketFactory();
+			client.executeCommand(ServerTestSupport.START_TLS);
+			assertThrows(IOException.class, () -> client.negotiateSecureSocket("TLS"));
+			assertTrue(client.getSocketFactory() == before, "a failed negotiation must not switch the factory");
+
+			// The broken session is replaced by a working plain one
+			assertTrue(client.connect());
+			assertEcho(client, "recovered");
 		}
 	}
 }

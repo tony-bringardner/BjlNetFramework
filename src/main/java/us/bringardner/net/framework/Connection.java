@@ -127,9 +127,6 @@ public abstract class Connection extends BaseObject implements IConnection {
 		}
 
 		SSLSocketFactory factory = ctx.getSocketFactory();
-		//  Any new connections will be secure
-		setSocketFactory(factory);
-
 		Socket plain = getSocket();
 		boolean clientMode = isClientMode();
 		SSLSocket tmp = (SSLSocket)factory.createSocket(plain, clientMode ? getPeerHost() : null, plain.getPort(), false);
@@ -151,6 +148,9 @@ public abstract class Connection extends BaseObject implements IConnection {
 		tmp.startHandshake();
 		sslSocket = tmp;
 		secure = true;
+		//  Any new connections (e.g. FTP style data connections) will be secure.
+		//  Set after the handshake so a failed negotiation leaves the factory unchanged.
+		setSocketFactory(factory);
 
 		configureStreams();
 	}
