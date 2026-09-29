@@ -2,7 +2,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<version>0.2.0</version>
+	<version>1.0.0</version>
 	<groupId>us.bringardner</groupId>
 	<artifactId>bjl_net_framework</artifactId>
 	<name>Network Framework</name>
@@ -50,6 +50,13 @@
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.15</version>
+				<configuration>
+					<excludes>
+						<!-- Swing dialog, needs a person to click it -->
+						<exclude>**/CertificateValidotorDialog*</exclude>
+						<exclude>**/VisualCertificateValidator*</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<execution>
 						<id>prepare-agent</id>
@@ -122,21 +129,9 @@
 			<version>0.1.2</version>
 		</dependency>
 
-		<!-- TestFileBasedAcl uses JUnit 5, the other tests JUnit 4 (run by the vintage engine) -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.vintage</groupId>
-			<artifactId>junit-vintage-engine</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13.2</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

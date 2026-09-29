@@ -1,5 +1,6 @@
 package us.bringardner.net.framework;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -18,6 +19,15 @@ import us.bringardner.net.framework.server.PropertyAuthenticator;
 import us.bringardner.net.framework.server.Server;
 
 public class TestFileBasedAcl {
+
+	@AfterEach
+	public void clearProperties() {
+		// System properties are JVM wide, don't leak them into other tests
+		System.clearProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY);
+		System.clearProperty("TestSetver.user0");
+		System.clearProperty("TestSetver.user1");
+		System.clearProperty("TestSetver.userFile");
+	}
 
 	@Test
 	public void testPropertyAcl() {

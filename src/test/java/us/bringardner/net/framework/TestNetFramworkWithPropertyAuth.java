@@ -32,9 +32,11 @@ import java.util.Map;
 
 import javax.net.ssl.SSLContext;
 
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import us.bringardner.net.framework.client.CommandClient;
 import us.bringardner.net.framework.client.ICommandResponse;
 import us.bringardner.net.framework.server.AbstractCommandProcessor;
@@ -86,10 +88,12 @@ public class TestNetFramworkWithPropertyAuth {
 			public void execute(ICommandProcessor processor, IRequestContext context) throws IOException {
 				if( !context.hasNext()) {
 					processor.reply(REPLY_500_GENERIC_ERROR,"Not enough parameters");
+					return;
 				}
 				String user = context.getNextToken();
 				if( !context.hasNext()) {
 					processor.reply(REPLY_500_GENERIC_ERROR,"Not enough parameters");
+					return;
 				}
 				String password = context.getNextToken();
 				
@@ -137,6 +141,13 @@ public class TestNetFramworkWithPropertyAuth {
 	}
 	
 	
+	@AfterEach
+	public void clearProperties() {
+		// System properties are JVM wide, don't leak them into other tests
+		System.clearProperty(IServer.AUTHENTICATOION_PROVIDER_PROPERTY);
+		System.clearProperty("EchoServer.user0");
+	}
+
 	@Test
 	public void testEchoServer() throws IOException {
 
@@ -197,51 +208,54 @@ public class TestNetFramworkWithPropertyAuth {
 
 		
 		svr.start();
-		int cnt = 0;
-		// wait for the server to start
-		while( cnt < 50 && !svr.isRunning()) {
-			try {
-				cnt++;
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-			}
-		}
-		TestCase.assertTrue(svr.isRunning());
-
-		String msgs [] = {
-				"text1",
-				"test2"
-		};
-
-		/**
-		 * Create s simple client that will send commands to the server and 
-		 * validate the response.
-		 */
-		try(CommandClient client = new CommandClient("localhost",svr.getLocalPort())){
-			TestCase.assertTrue("Can't connect to echo server",client.connect()); 
-			
-			ICommandResponse resp = client.executeCommand(LOGING_COMMAND,"echoUser","password");
-			
-			if( !resp.isPositive()) {
-				System.out.println("Bad login "+resp);
-			}
-			
-			TestCase.assertTrue("Can't login to echo server",resp.isPositive());
-			
-			for (int idx = 0; idx < msgs.length; idx++) {
-
-				resp = client.executeCommand(ECHO_COMMAND,msgs[idx]);
-				if( !resp.isPositive()) {
-					System.out.println("Bad echo response='"+resp+"'");
+		try {
+			int cnt = 0;
+			// wait for the server to start
+			while( cnt < 50 && !svr.isRunning()) {
+				try {
+					cnt++;
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
 				}
-				// positive response
-				
-				TestCase.assertTrue("Did not get a positive response",resp.isPositive());
-				TestCase.assertEquals(msgs[idx],resp.getResponseText());
-
 			}
+			assertTrue(svr.isRunning());
+
+			String msgs [] = {
+					"text1",
+					"test2"
+			};
+
+			/**
+			 * Create s simple client that will send commands to the server and 
+			 * validate the response.
+			 */
+			try(CommandClient client = new CommandClient("localhost",svr.getLocalPort())){
+				assertTrue(client.connect(), "Can't connect to echo server"); 
+			
+				ICommandResponse resp = client.executeCommand(LOGING_COMMAND,"echoUser","password");
+			
+				if( !resp.isPositive()) {
+					System.out.println("Bad login "+resp);
+				}
+			
+				assertTrue(resp.isPositive(), "Can't login to echo server");
+			
+				for (int idx = 0; idx < msgs.length; idx++) {
+
+					resp = client.executeCommand(ECHO_COMMAND,msgs[idx]);
+					if( !resp.isPositive()) {
+						System.out.println("Bad echo response='"+resp+"'");
+					}
+					// positive response
+				
+					assertTrue(resp.isPositive(), "Did not get a positive response");
+					assertEquals(msgs[idx],resp.getResponseText());
+
+				}
+			}
+		} finally {
+			svr.stop();
 		}
-		svr.stop();
 
 	}
 
