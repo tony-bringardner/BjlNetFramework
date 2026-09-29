@@ -30,52 +30,75 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import us.bringardner.core.BaseObject;
 import us.bringardner.net.framework.client.DynamicTrustManager.CertificateValidator.ManageAs;
 
-public class DynamicTrustManager extends BaseObject implements X509TrustManager {
+/**
+ * Server certificate trust for clients.
+ * 
+ * A certificate is trusted if:
+ * <ol>
+ * <li>the JVM trust store trusts it (including the host name check when the socket asks for one), or</li>
+ * <li>the user previously approved this certificate <b>for this host</b>, or</li>
+ * <li>the {@link CertificateValidator} approves it now.</li>
+ * </ol>
+ * 
+ * Approvals are stored as "host|sha256-fingerprint~subject" in ~/.bjlTructed. 
+ * Entries written by earlier versions (keyed by the certificate signature only) are 
+ * still honored for any host so users are not asked again, new approvals are always host specific.
+ * 
+ * This class extends X509ExtendedTrustManager so the host is known during the handshake. 
+ * Because of that the JVM does not add its own host name check, that is done 
+ * by the delegated JVM trust manager (step 1) or implied by the host specific approval (step 2).
+ */
+public class DynamicTrustManager extends X509ExtendedTrustManager {
 
-	// Sorted (like the TreeMap it replaced) and safe to use from several connections at once
+	private static final BaseObject log = new BaseObject();
+	private static final String ANY_HOST = "*";
+
+	// Persisted approvals. Sorted (like the TreeMap it replaced) and thread safe.
 	private static final Map<String,String> trusted = new ConcurrentSkipListMap<String, String>();
+	// ACCEPT_ONCE approvals, kept for the life of the JVM but never written to disk.
+	private static final Map<String,String> sessionTrusted = new ConcurrentHashMap<String, String>();
 
 	static {
-		BufferedReader in =null;
-		try {
-			in = new BufferedReader(new FileReader(getPersistanceFile()));
+		try(BufferedReader in = new BufferedReader(new FileReader(getPersistanceFile()))) {
 			String line = in.readLine();
 			while( line != null ) {
 				if(!line.startsWith("#")) {
-					String [] parts = line.split("[~]");
+					String [] parts = line.split("~",2);
 					if(parts.length == 2) {
 						trusted.put(parts[0], parts[1]);
 					}
 				}
 				line = in.readLine();
 			}
-
 		} catch (Throwable e) {
-			// Ignore this
-		} finally {
-			if( in != null ) {
-				try {
-					in.close();
-				} catch (Exception e2) {
-				}
-			}
+			// Ignore this, no file yet
 		}
 	}
 
@@ -97,18 +120,49 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 			Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
 	}
-	
+
 	private static File getPersistanceFile() {
 		File ret = new File(System.getProperty("user.home"),".bjlTructed");
+		return ret;
+	}
+
+	/**
+	 * Remove every approval (persisted and ACCEPT_ONCE) for a host.
+	 * @return the number of approvals removed
+	 */
+	public static int removeTrusted(String host) throws IOException {
+		String prefix = hostKey(host)+"|";
+		int ret = 0;
+		for (String key : new ArrayList<String>(trusted.keySet())) {
+			if( key.startsWith(prefix) && trusted.remove(key) != null) {
+				ret++;
+			}
+		}
+		for (String key : new ArrayList<String>(sessionTrusted.keySet())) {
+			if( key.startsWith(prefix) && sessionTrusted.remove(key) != null) {
+				ret++;
+			}
+		}
+		if( ret > 0 ) {
+			saveTrusted();
+		}
 		return ret;
 	}
 
 	public static interface CertificateValidator {
 		public enum  ManageAs {REJECT, ACCEPT_ONCE,ACCEPT_ALWAYS};
 		public ManageAs validate(X509Certificate cert);
+
+		/**
+		 * Called with the host being connected to (may be null if unknown). 
+		 * Override to show the host to the user, the default ignores it.
+		 */
+		public default ManageAs validate(X509Certificate cert, String host) {
+			return validate(cert);
+		}
 	}
 
-	private static CertificateValidator defaultValidator = new CertificateValidator() {
+	private static volatile CertificateValidator defaultValidator = new CertificateValidator() {
 
 		public ManageAs validate(X509Certificate cert) {
 			return ManageAs.REJECT;
@@ -145,7 +199,7 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 				tmf.init((KeyStore)null);
 				trustManagers = tmf.getTrustManagers();
 			} catch (Exception e) {
-				logError("Can't get instance of trust manager",e);
+				log.logError("Can't get instance of trust manager",e);
 			}  
 		}
 
@@ -166,77 +220,141 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 		acceptedIssuers = iss.toArray(new X509Certificate[iss.size()]);
 	}
 
-
-
 	public DynamicTrustManager() {
 		this(null);
 	}
 
-
+	/**
+	 * Check without knowing the host. Only approvals made without a host (or legacy approvals) apply.
+	 */
 	public void checkTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+		checkTrusted(chain, authType, null, null, null);
+	}
+
+	private void checkTrusted(X509Certificate[] chain, String authType, String host, Socket socket, SSLEngine engine) throws CertificateException {
 		if( chain == null || chain.length < 1) {
 			//  should never happen
 			throw new CertificateException("No certificates to validate");
 		}
 
-		boolean ok = false;
-
+		// 1> The JVM trust store
+		CertificateException lastError = null;
 		TrustManager[] managers = trustManagers == null ? new TrustManager[0] : trustManagers;
 		for (TrustManager tm : managers) {
-			if (tm instanceof X509TrustManager) {
-				X509TrustManager x5 = (X509TrustManager) tm;
+			try {
+				if( tm instanceof X509ExtendedTrustManager && socket != null ) {
+					((X509ExtendedTrustManager) tm).checkServerTrusted(chain, authType, socket);
+				} else if( tm instanceof X509ExtendedTrustManager && engine != null ) {
+					((X509ExtendedTrustManager) tm).checkServerTrusted(chain, authType, engine);
+				} else if (tm instanceof X509TrustManager) {
+					((X509TrustManager) tm).checkServerTrusted(chain, authType);
+				} else {
+					continue;
+				}
+				return;
+			} catch (CertificateException e) {
+				lastError = e;
+				log.logDebug("Not trusted by "+tm+": "+e);
+			}
+		}
+
+		// 2> Previously approved for this host
+		X509Certificate cert = chain[0];
+		String key = hostKey(host)+"|"+fingerprint(cert);
+		if( trusted.containsKey(key) || sessionTrusted.containsKey(key)) {
+			return;
+		}
+		String legacy = legacyKey(cert);
+		if( trusted.containsKey(legacy)) {
+			log.logDebug("Trusting "+cert.getSubjectX500Principal()+" from a legacy (not host specific) approval");
+			return;
+		}
+
+		// 3> Ask
+		String name = cert.getSubjectX500Principal().getName();
+		CertificateValidator v = validator;
+		if( v != null ) {
+			ManageAs action = v.validate(cert, host);
+			if( action == ManageAs.ACCEPT_ALWAYS ) {
+				trusted.put(key,name);
 				try {
-					x5.checkServerTrusted(chain, authType);
-					ok = true;
-					break;
-				} catch (CertificateException | RuntimeException e) {
-					logDebug("Not trusted by "+tm+": "+e);
+					saveTrusted();
+				} catch (IOException e) {
+					log.logError("Can't save trusted", e);
 				}
+				return;
+			} else if( action == ManageAs.ACCEPT_ONCE ) {
+				//  Trusted for the program duration but not persisted
+				sessionTrusted.put(key,name);
+				return;
 			}
 		}
 
-		if( !ok ) {
-
-			String sig = java.util.Base64.getEncoder().encodeToString(chain[0].getSignature()).replaceAll("[\n]","");
-			String name = chain[0].getSubjectX500Principal().getName();
-			if( trusted.containsKey(sig)) {
-				ok = true;
-			} else {
-				if( validator != null ) {
-					ManageAs action = validator.validate(chain[0]);
-					switch (action) {
-					case ACCEPT_ALWAYS:
-						trusted.put(sig,name);
-						ok = true;
-						try {
-							saveTrusted();
-						} catch (IOException e) {
-							logError("Can't save trusted", e);
-						}
-						break;
-					case ACCEPT_ONCE:
-						//  this will be trusted for the program duration but not persisted
-						trusted.put(sig,name);
-						ok = true;
-						break;
-					case REJECT:break;
-					default:break;
-					}
-				}
-			}
+		CertificateException ex = new CertificateException("Certificate for "+(host == null ? "server" : host)+" ("+name+") is not trusted");
+		if( lastError != null ) {
+			ex.initCause(lastError);
 		}
+		throw ex;
+	}
 
-		if( !ok ) {
-			throw new CertificateException("Not valid");
+	private static String hostKey(String host) {
+		return host == null || host.isEmpty() ? ANY_HOST : host.toLowerCase(Locale.ROOT);
+	}
+
+	private static String fingerprint(X509Certificate cert) throws CertificateException {
+		try {
+			byte[] digest = MessageDigest.getInstance("SHA-256").digest(cert.getEncoded());
+			StringBuilder ret = new StringBuilder(digest.length*2);
+			for (byte b : digest) {
+				ret.append(String.format("%02x", b & 0xff));
+			}
+			return ret.toString();
+		} catch (NoSuchAlgorithmException | CertificateEncodingException e) {
+			throw new CertificateException(e);
 		}
 	}
 
+	// Key used by earlier versions
+	private static String legacyKey(X509Certificate cert) {
+		return java.util.Base64.getEncoder().encodeToString(cert.getSignature()).replaceAll("[\n]","");
+	}
+
+	private static String peerHost(Socket socket) {
+		if (socket instanceof SSLSocket) {
+			SSLSession session = ((SSLSocket) socket).getHandshakeSession();
+			if( session != null ) {
+				return session.getPeerHost();
+			}
+		}
+		return null;
+	}
+
 	public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-		throw new CertificateException("This object i snot intended for clinet processing.");		
+		throw new CertificateException("This object is not intended for client certificate processing.");		
+	}
+
+	@Override
+	public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+		checkClientTrusted(chain, authType);
+	}
+
+	@Override
+	public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+		checkClientTrusted(chain, authType);
 	}
 
 	public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
 		checkTrusted(chain, authType);
+	}
+
+	@Override
+	public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+		checkTrusted(chain, authType, peerHost(socket), socket, null);
+	}
+
+	@Override
+	public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+		checkTrusted(chain, authType, engine == null ? null : engine.getPeerHost(), null, engine);
 	}
 
 	public X509Certificate[] getAcceptedIssuers() {
@@ -246,7 +364,5 @@ public class DynamicTrustManager extends BaseObject implements X509TrustManager 
 	public void setAcceptedIssuers(X509Certificate[] acceptedIssuers) {
 		this.acceptedIssuers = acceptedIssuers;
 	}
-
-
 
 }
