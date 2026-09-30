@@ -515,10 +515,32 @@ public class Server extends AbstractCoreServer implements IServer {
 
 			//  We're done so close the serverSocket and exit.
 			close(svr);
+			// Forget the closed socket so a later start() creates a new one
+			// (a closed ServerSocket can't be reused, so a restart used to fail).
+			svr = null;
 		}
 
 		running = false;
 		logInfo("Server "+getName()+" has stopped.");
+	}
+
+	/**
+	 * Stop the server. Also closes the listening socket so a blocked accept()
+	 * returns at once; the accept loop sees {@code stopping} and exits.
+	 * Previously stop() only set the flag, so it waited for accept() to time
+	 * out (up to the accept timeout, 5 s by default).
+	 */
+	@Override
+	public void stop() {
+		super.stop();
+		ServerSocket s = svr;
+		if( s != null ) {
+			try {
+				s.close();
+			} catch (IOException e) {
+				// already closed
+			}
+		}
 	}
 
 	/**

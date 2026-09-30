@@ -98,6 +98,35 @@ public class TestServerLimits {
 		assertFalse(svr.isRunning());
 	}
 
+	/**
+	 * stop() used to only set a flag, so it waited for accept() to time out
+	 * (5 s with the default accept timeout).
+	 */
+	@Test
+	public void testStopIsImmediateWithDefaultAcceptTimeout() {
+		TestServer svr = ServerTestSupport.create("QuickStopServer", ServerTestSupport.standardCommands(), null);
+		svr.setAcceptTimeout(us.bringardner.net.framework.server.Server.DEFAULT_ACCEPT_TIMEOUT);
+		ServerTestSupport.start(svr);
+		long start = System.currentTimeMillis();
+		svr.stop();
+		ServerTestSupport.waitFor(() -> !svr.isRunning(), 10000, "server did not stop");
+		long elapsed = System.currentTimeMillis() - start;
+		assertTrue(elapsed < 1000, "stop() took " + elapsed + " ms");
+	}
+
+	/** A stopped server can be started again (it used to reuse its closed server socket). */
+	@Test
+	public void testRestartAfterStop() throws Exception {
+		TestServer svr = ServerTestSupport.start(ServerTestSupport.create("RestartServer", ServerTestSupport.standardCommands(), null));
+		ServerTestSupport.stop(svr);
+		ServerTestSupport.start(svr);
+		try (CommandClient client = ServerTestSupport.connect(svr)) {
+			assertEcho(client);
+		} finally {
+			ServerTestSupport.stop(svr);
+		}
+	}
+
 	@Test
 	public void testStopClosesClients() throws Exception {
 		TestServer svr = ServerTestSupport.start(ServerTestSupport.create("StopServer", ServerTestSupport.standardCommands(), null));
