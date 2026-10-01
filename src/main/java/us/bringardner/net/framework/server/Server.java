@@ -40,6 +40,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 import javax.net.ServerSocketFactory;
 import javax.net.SocketFactory;
@@ -289,24 +290,36 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	}
 
+	/** Names a client may use to ask for TLS: TLS, SSL, TLS-C, TLS-P, TLSv1.3, SSLv3... (any case) */
+	private static final Pattern TLS_MECHANISM = Pattern.compile("(?i)(TLS|SSL)([-_V].*)?");
+
+	/**
+	 * The TLS context for a STARTTLS / AUTH style upgrade of a connection (BJL-38).
+	 * <p>
+	 * The name the client sends (AUTH TLS, AUTH SSL, TLS-C, STARTTLS...) means "start TLS"; it
+	 * does not choose a TLS version. A JSSE server context accepts the same versions whatever
+	 * name it was created with, so every upgrade uses the server's one context
+	 * ({@link #getSSLContext()}). That keeps a single session cache, so clients can resume
+	 * sessions across connections (and FTP data connections can resume the control session).
+	 * <p>
+	 * This used to switch the server's protocol to the requested name, build a context and switch
+	 * back: a new context for every upgrade, the server's main context discarded too, and another
+	 * thread could get the other protocol's context during the switch. To limit the TLS versions
+	 * use the socket's enabled protocols (e.g. {@code SecureBaseObject.PROPERTY_FORCE_TLS_VERSION}),
+	 * not the context name.
+	 *
+	 * @param sslOrTls the mechanism the client asked for: null, TLS, SSL or a name starting with
+	 * TLS or SSL (TLS-C, TLS-P, TLSv1.3...)
+	 * @return the server's TLS context
+	 * @throws IOException if the name is not a TLS/SSL mechanism or the context can't be created
+	 */
 	public SSLContext getSSLContext(String sslOrTls) throws IOException {
-
-		String current = getProtocol();
-		if( sslOrTls == null || sslOrTls.equals(current)) {
-			return super.getSSLContext();
+		if( sslOrTls != null && !TLS_MECHANISM.matcher(sslOrTls.trim()).matches() ) {
+			throw new IOException("Unsupported security mechanism: "+sslOrTls);
 		}
-
-		// Build the context with the requested protocol, then restore the server's own protocol.
-		// (Previously the protocol was restored before the context was created, so it was ignored.)
-		synchronized (this) {
-			try {
-				super.setProtocol(sslOrTls);
-				return super.getSSLContext();
-			} finally {
-				setProtocol(current);
-			}
-		}
+		return getSSLContext();
 	}
+
 
 
 	public SSLContext getSSLContext(String sslOrTls, String instanceName, String keyStoreType, String passPhrase, String keyFileName) throws IOException {

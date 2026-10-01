@@ -167,9 +167,10 @@ public class TestImplicitTls {
 
 	@Test
 	public void testSslContextForProtocol() throws Exception {
+		// One context for every mechanism name (BJL-38, see TestServerSslContext)
 		String before = svr.getProtocol();
 		SSLContext ctx = svr.getSSLContext("TLSv1.2");
-		assertEquals("TLSv1.2", ctx.getProtocol());
+		assertSame(svr.getSSLContext(), ctx);
 		assertEquals(before, svr.getProtocol(), "the server's own protocol must not change");
 		assertNotNull(svr.getSSLContext((String) null));
 	}

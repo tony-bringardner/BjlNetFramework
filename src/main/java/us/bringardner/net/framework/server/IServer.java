@@ -88,9 +88,12 @@ public interface IServer extends IManagedThread {
 	 */
 	public ServerSocketFactory getServerSocketFactory(boolean channelSecure);
 	/**
-	 * @param sslOrTsl
-	 * @return
-	 * @throws IOException 
+	 * The TLS context for upgrading a connection (STARTTLS, AUTH TLS...). The name is the
+	 * mechanism the client asked for; it does not select a different context, so all
+	 * connections share one TLS session cache.
+	 * @param sslOrTsl the mechanism the client asked for (TLS, SSL, ...) or null
+	 * @return the server's TLS context
+	 * @throws IOException if the mechanism is not supported or the context can't be created
 	 */
 	public SSLContext getSSLContext(String sslOrTsl) throws IOException;
 	
