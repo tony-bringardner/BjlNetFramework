@@ -44,6 +44,39 @@ public class CommandClient extends Client implements ICommandClient {
 		super(host, port);
 	}
 
+	/**
+	 * Most commands sent before reading their replies. Bounds what is in flight, so a long
+	 * list can't fill both sides' socket buffers and leave client and server each waiting
+	 * for the other to read (RFC 2920 section 3.5).
+	 */
+	public static final int MAX_PIPELINED = 64;
+
+	/**
+	 * Pipelining (BJL-43): sends the commands together, with one flush per batch of at most
+	 * {@link #MAX_PIPELINED}, then reads one reply per command in order. Each command costs a
+	 * round trip with {@link #executeCommand(String)}; a batch costs one. Use it only for
+	 * commands the server lets a client send before the previous reply (for SMTP: when EHLO
+	 * advertised PIPELINING, and see RFC 2920 for which commands may be grouped).
+	 * <p>
+	 * If a reply can't be read the exception is thrown and the replies still on the way are
+	 * unread, so the connection should be closed.
+	 */
+	@Override
+	public java.util.List<ICommandResponse> executeCommands(java.util.List<String> commands) throws IOException {
+		java.util.List<ICommandResponse> ret = new java.util.ArrayList<>(commands.size());
+		for (int from = 0; from < commands.size(); from += MAX_PIPELINED) {
+			java.util.List<String> batch = commands.subList(from, Math.min(commands.size(), from + MAX_PIPELINED));
+			// one write and flush for the batch (Connection.writeLines, BJL-41)
+			writeLines(batch);
+			for (int idx = 0; idx < batch.size(); idx++) {
+				ICommandResponse resp = getCommandResponseFactory().getCommandResponse();
+				resp.readResponse(this);
+				ret.add(resp);
+			}
+		}
+		return ret;
+	}
+
 	public ICommandResponse executeCommand(String command) throws IOException {
 		ICommandResponse ret = getCommandResponseFactory().getCommandResponse();
 		writeLine(command);

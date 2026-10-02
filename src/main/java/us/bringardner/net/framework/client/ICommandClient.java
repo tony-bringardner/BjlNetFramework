@@ -49,6 +49,23 @@ public interface ICommandClient extends IClient {
 	}
 	
 	public ICommandResponse executeCommand(String command) throws IOException;
+
+	/**
+	 * Run several commands and return their replies in order. {@link CommandClient} sends
+	 * them together (pipelining, e.g. SMTP PIPELINING, RFC 2920); this default runs them one
+	 * at a time. Only pipeline commands the server allows to be sent before the previous
+	 * reply arrives.
+	 * @param commands the command lines
+	 * @return one reply per command, in order
+	 * @throws IOException if the connection fails
+	 */
+	public default java.util.List<ICommandResponse> executeCommands(java.util.List<String> commands) throws IOException {
+		java.util.List<ICommandResponse> ret = new java.util.ArrayList<>(commands.size());
+		for (String command : commands) {
+			ret.add(executeCommand(command));
+		}
+		return ret;
+	}
 	public ICommandResponseFactory getCommandResponseFactory();
 	public void setCommandResponseFactory(ICommandResponseFactory commandResponseFactory);
 	public ICommandResponse executeCommand(String ... args) throws IOException;
