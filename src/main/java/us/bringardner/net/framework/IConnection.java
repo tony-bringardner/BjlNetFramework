@@ -94,5 +94,18 @@ public interface IConnection extends ILineReader, ILineWriter {
 	 * @param sslOrTsl
 	 */
 	public void negotiateSecureSocket(String sslOrTsl) throws IOException;
+
+	/**
+	 * Write several lines and flush once, so they go out together (one write, one TCP segment
+	 * or TLS record when they fit) instead of one per line (BJL-41).
+	 * @param lines the lines, without line ends
+	 * @throws IOException if the connection fails
+	 */
+	public default void writeLines(java.util.List<String> lines) throws IOException {
+		for (String line : lines) {
+			writeLine(line);
+		}
+		flush();
+	}
 	
 }

@@ -390,6 +390,27 @@ public abstract class Connection extends BaseObject implements IConnection {
 		writer.setAutoFlush(trueOrFalse);
 	}
 
+	/**
+	 * Writes all the lines into the output buffer with auto flush off, then flushes once
+	 * (with auto flush on, the default, every writeLine is its own write and TCP segment).
+	 */
+	@Override
+	public final void writeLines(java.util.List<String> lines) throws IOException {
+		ILineWriter w = openWriter();
+		synchronized (w) {
+			boolean autoFlush = w.isAutoFlush();
+			w.setAutoFlush(false);
+			try {
+				for (String line : lines) {
+					w.writeLine(line);
+				}
+			} finally {
+				w.setAutoFlush(autoFlush);
+			}
+			w.flush();
+		}
+	}
+
 	public final void writeLine(String line) throws IOException {
 		openWriter().writeLine(line);
 		

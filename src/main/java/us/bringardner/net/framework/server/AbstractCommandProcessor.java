@@ -207,6 +207,16 @@ public abstract  class AbstractCommandProcessor extends AbstractProcessor implem
 		
 	}
 
+	/**
+	 * Send several reply lines with one flush, e.g. a multi-line reply ("211-...", ...,
+	 * "211 End"): they go out together instead of one TCP segment / TLS record per line
+	 * (BJL-41). The caller formats the lines.
+	 * @param lines the reply lines
+	 */
+	public void reply(java.util.List<String> lines) throws IOException {
+		getConnection().writeLines(lines);
+	}
+
 	public void setDebug(boolean b) {
 		this.debug = b;
 	}
