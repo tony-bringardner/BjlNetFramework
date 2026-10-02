@@ -197,6 +197,12 @@ public class Server extends AbstractCoreServer implements IServer {
 	private int backlog = 0;
 	private boolean debug;
 	private volatile IAccessControlList accessControl;
+	/**
+	 * True once the access control property has been looked at and named no provider, so
+	 * every command doesn't take the server lock, look the property up again and log
+	 * "No access control defined" (BJL-42). Cleared by setAccessControl.
+	 */
+	private volatile boolean noAccessControl;
 	private String serverGreating;
 
 
@@ -964,9 +970,9 @@ public class Server extends AbstractCoreServer implements IServer {
 	 */
 	@Override
 	public IAccessControlList getAccessControl() {
-		if( accessControl == null ) {
+		if( accessControl == null && !noAccessControl ) {
 			synchronized (this) {
-				if( accessControl == null ) {
+				if( accessControl == null && !noAccessControl ) {
 					String tmp = getProperty(AUTHENTICATION_PROVIDER_PROPERTY);
 					if(tmp != null ) {
 						try {
@@ -981,6 +987,8 @@ public class Server extends AbstractCoreServer implements IServer {
 							throw new IllegalStateException("Fatal Error! Can't configure access control class='"+tmp,e);
 						}
 					} else {
+						// remembered and logged once (BJL-42)
+						noAccessControl = true;
 						logInfo("No access control defined in server "+getName());
 					}
 				}
@@ -992,7 +1000,9 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	@Override
 	public void setAccessControl(IAccessControlList acl) {
-		this.accessControl = acl;		
+		this.accessControl = acl;
+		// null: look at the provider property again on the next use
+		this.noAccessControl = false;
 	}
 
 
