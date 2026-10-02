@@ -138,4 +138,27 @@ public interface IServer extends IManagedThread {
 	 */
 	void setAccessControl(IAccessControlList acl);
 	
+
+	/**
+	 * Start a thread that belongs to a session so the server manages it (thread kind, name,
+	 * stopped with its session and with the server). See Server.startTask (BJL-59).
+	 * The default just starts it, for servers that don't manage tasks.
+	 */
+	default void startTask(IProcessor owner, us.bringardner.core.BaseThread task) {
+		task.start();
+	}
+
+	/**
+	 * Run a task once after a delay on the server's scheduler. See Server.schedule (BJL-59).
+	 */
+	default java.util.concurrent.ScheduledFuture<?> schedule(Runnable task, long delay, java.util.concurrent.TimeUnit unit) {
+		throw new UnsupportedOperationException("This server has no scheduler");
+	}
+
+	/**
+	 * Run a task periodically on the server's scheduler. See Server.scheduleAtFixedRate (BJL-59).
+	 */
+	default java.util.concurrent.ScheduledFuture<?> scheduleAtFixedRate(Runnable task, long initialDelay, long period, java.util.concurrent.TimeUnit unit) {
+		throw new UnsupportedOperationException("This server has no scheduler");
+	}
 }

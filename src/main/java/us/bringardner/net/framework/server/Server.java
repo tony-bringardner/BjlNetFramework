@@ -40,6 +40,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import javax.net.ServerSocketFactory;
@@ -179,14 +183,27 @@ public class Server extends AbstractCoreServer implements IServer {
 	private IConnectionFactory connectionFactory;
 	private int acceptTimeout     = getDefaultAcceptTimeout();
 	private long maxIdleConnection = DEFAULT_MAX_IDLE_CONNECTION;
-	private long adminFreq = DEFAULT_ADMIN_REFQ;
-	private long lastAdmin=0;
+	private volatile long adminFreq = DEFAULT_ADMIN_REFQ;
+	private volatile long lastAdmin=0;
 
 	// Shared by all processor threads
 	private volatile Map<String,Object> runtimeValues = new ConcurrentHashMap<String, Object>();
 	// Used by the accept thread, every processor thread and doAdmin(), so it must be thread safe.
 	// Entries are removed explicitly in removeClient() / doAdmin(), so weak keys are not needed.
 	private final Map<Socket, IProcessor> activeClients = new ConcurrentHashMap<Socket, IProcessor>();
+
+	/**
+	 * Threads started for a session with {@link #startTask(IProcessor, BaseThread)}, by session
+	 * (BJL-59). A session's entry exists from the time it is accepted until removeClient().
+	 */
+	private final Map<IProcessor, java.util.Set<BaseThread>> sessionTasks = new ConcurrentHashMap<IProcessor, java.util.Set<BaseThread>>();
+	private final AtomicInteger taskNumber = new AtomicInteger();
+	/** How long the stopping server waits for session tasks to end, see {@link #setTaskStopWait(long)}. */
+	public static final long DEFAULT_TASK_STOP_WAIT = 5000;
+	private volatile long taskStopWait = DEFAULT_TASK_STOP_WAIT;
+	/** One daemon platform thread per running server for scheduled work (BJL-59). */
+	private volatile ScheduledThreadPoolExecutor scheduler;
+	private volatile ScheduledFuture<?> adminTask;
 	private int connectionTimeout = getDefaultConnectionTimeout();
 	private int maxClients = DEFAULT_MAX_CLIENTS;
 	private String serverBusyMessage;
@@ -520,6 +537,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		}
 
 		if( svr != null ) {
+			startScheduler();
 			started = running = true;
 			lastAdmin = System.currentTimeMillis();
 
@@ -546,15 +564,13 @@ public class Server extends AbstractCoreServer implements IServer {
 				if( socket != null ) {
 					handleNewConnection(socket);
 				}
-
-				// Runs even when accept() times out so idle connections are reaped on a quiet server.
-				if( (System.currentTimeMillis()-lastAdmin) > adminFreq) {
-					doAdmin();
-				}
+				// doAdmin() runs on the server's scheduler (BJL-59), not here between accepts
 			}
 
 			//  We're done so close the serverSocket and exit.
 			close(svr);
+			stopScheduler();
+			stopAllTasks();
 			// Forget the closed socket so a later start() creates a new one
 			// (a closed ServerSocket can't be reused, so a restart used to fail).
 			svr = null;
@@ -750,6 +766,7 @@ public class Server extends AbstractCoreServer implements IServer {
 				((BaseThread) proc).setVirtual(isUsingVirtualThreads());
 			}
 			activeClients.put(socket,proc);
+			sessionTasks.put(proc, java.util.Collections.newSetFromMap(new ConcurrentHashMap<BaseThread, Boolean>()));
 			proc.start();
 			handedOff = true;
 		} catch (Exception e) {
@@ -815,6 +832,260 @@ public class Server extends AbstractCoreServer implements IServer {
 
 	}
 
+	// ------------------------------------------------------------------ session tasks (BJL-59)
+
+	/**
+	 * Start a thread that belongs to a session, so the server manages it: it runs on the same
+	 * kind of thread as sessions ({@link #isUsingVirtualThreads()}), gets a name if it has none,
+	 * and is stopped (stop() then interrupt) when its session ends or the server stops; while it
+	 * runs, the idle check doesn't close its session. A task that has to release something to
+	 * end (e.g. close a socket) should do that in its stop() method.
+	 * 
+	 * @param owner the session (a processor this server accepted and has not removed)
+	 * @param task the thread to start
+	 * @throws IllegalStateException if the session has ended or the server is stopping
+	 */
+	@Override
+	public void startTask(IProcessor owner, BaseThread task) {
+		java.util.Objects.requireNonNull(owner, "owner");
+		java.util.Objects.requireNonNull(task, "task");
+		if( stopping ) {
+			throw new IllegalStateException("Server "+getName()+" is stopping");
+		}
+		// Started inside computeIfPresent so it can't race removeClient() for the same session
+		java.util.Set<BaseThread> tasks = sessionTasks.computeIfPresent(owner, (k, set) -> {
+			set.removeIf(t -> !t.isAlive());
+			task.setVirtual(isUsingVirtualThreads());
+			if( task.getName() == null ) {
+				String session = owner instanceof BaseThread ? ((BaseThread) owner).getName() : null;
+				task.setName((session == null || session.isEmpty() ? getName() : session)+"-task-"+taskNumber.incrementAndGet());
+			}
+			task.start();
+			set.add(task);
+			return set;
+		});
+		if( tasks == null ) {
+			throw new IllegalStateException("The session has ended (or was not accepted by server "+getName()+")");
+		}
+		if( stopping ) {
+			// The server began stopping while the task was starting
+			stopTask(task);
+		}
+	}
+
+	/**
+	 * @param owner a session
+	 * @return the session's tasks that are still running (a copy)
+	 */
+	public java.util.List<BaseThread> getTasks(IProcessor owner) {
+		java.util.List<BaseThread> ret = new java.util.ArrayList<BaseThread>();
+		java.util.Set<BaseThread> tasks = owner == null ? null : sessionTasks.get(owner);
+		if( tasks != null ) {
+			for (BaseThread t : tasks) {
+				if( t.isAlive() ) {
+					ret.add(t);
+				}
+			}
+		}
+		return ret;
+	}
+
+	/**
+	 * @return the number of session tasks running on this server
+	 */
+	public int getTaskCount() {
+		int ret = 0;
+		for (java.util.Set<BaseThread> tasks : sessionTasks.values()) {
+			for (BaseThread t : tasks) {
+				if( t.isAlive() ) {
+					ret++;
+				}
+			}
+		}
+		return ret;
+	}
+
+	private boolean hasRunningTask(IProcessor owner) {
+		java.util.Set<BaseThread> tasks = sessionTasks.get(owner);
+		if( tasks != null ) {
+			for (BaseThread t : tasks) {
+				if( t.isAlive() ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private void stopTask(BaseThread task) {
+		try {
+			// stop() first (the task's own way to end), then interrupt; don't wait here
+			task.stop(0, true);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		} catch (RuntimeException e) {
+			logDebug("Error stopping task "+task.getName(), e);
+		}
+	}
+
+	private void stopTasks(java.util.Set<BaseThread> tasks) {
+		if( tasks != null ) {
+			for (BaseThread t : tasks) {
+				if( t.isAlive() ) {
+					stopTask(t);
+				}
+			}
+		}
+	}
+
+	/** Stop every session's tasks and wait up to {@link #getTaskStopWait()} for them to end. */
+	private void stopAllTasks() {
+		java.util.List<BaseThread> all = new java.util.ArrayList<BaseThread>();
+		for (java.util.Set<BaseThread> tasks : sessionTasks.values()) {
+			all.addAll(tasks);
+		}
+		sessionTasks.clear();
+		for (BaseThread t : all) {
+			if( t.isAlive() ) {
+				stopTask(t);
+			}
+		}
+		long end = System.currentTimeMillis() + taskStopWait;
+		for (BaseThread t : all) {
+			long left = end - System.currentTimeMillis();
+			if( left <= 0 ) {
+				break;
+			}
+			try {
+				t.join(left);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				break;
+			}
+		}
+		for (BaseThread t : all) {
+			if( t.isAlive() ) {
+				logError("Task "+t.getName()+" did not stop within "+taskStopWait+" ms of server "+getName()+" stopping");
+			}
+		}
+	}
+
+	/**
+	 * @return how long the stopping server waits for session tasks to end (ms)
+	 */
+	public long getTaskStopWait() {
+		return taskStopWait;
+	}
+
+	/**
+	 * @param milliSeconds how long the stopping server waits for session tasks to end (0 = don't wait)
+	 */
+	public void setTaskStopWait(long milliSeconds) {
+		this.taskStopWait = Math.max(0, milliSeconds);
+	}
+
+	// ------------------------------------------------------------------ scheduler (BJL-59)
+
+	private void startScheduler() {
+		ScheduledThreadPoolExecutor exec = new ScheduledThreadPoolExecutor(1, r -> {
+			Thread t = new Thread(r, getName()+"-scheduler");
+			t.setDaemon(true);
+			return t;
+		});
+		exec.setRemoveOnCancelPolicy(true);
+		exec.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+		exec.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+		scheduler = exec;
+		scheduleAdmin(exec);
+	}
+
+	private void scheduleAdmin(ScheduledThreadPoolExecutor exec) {
+		long freq = Math.max(1, adminFreq);
+		// Idle connections are reaped on a quiet server too
+		adminTask = exec.scheduleWithFixedDelay(logged("doAdmin", this::doAdmin), freq, freq, TimeUnit.MILLISECONDS);
+	}
+
+	private void stopScheduler() {
+		ScheduledThreadPoolExecutor exec = scheduler;
+		scheduler = null;
+		adminTask = null;
+		if( exec != null ) {
+			exec.shutdownNow();
+			try {
+				if( !exec.awaitTermination(taskStopWait, TimeUnit.MILLISECONDS) ) {
+					logError("Scheduled work of server "+getName()+" did not stop within "+taskStopWait+" ms");
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+	}
+
+	private ScheduledThreadPoolExecutor runningScheduler() {
+		ScheduledThreadPoolExecutor exec = scheduler;
+		if( exec == null || exec.isShutdown() ) {
+			throw new IllegalStateException("Server "+getName()+" is not running");
+		}
+		return exec;
+	}
+
+	/** An exception in one run is logged, and a periodic task keeps running. */
+	private Runnable logged(String what, Runnable task) {
+		return () -> {
+			try {
+				task.run();
+			} catch (RuntimeException e) {
+				logError("Error in scheduled task "+what+" of server "+getName(), e);
+			}
+		};
+	}
+
+	/**
+	 * Run a task once after a delay on the server's scheduler (one daemon platform thread per
+	 * running server, shut down when the server stops). Keep scheduled work short; start a
+	 * session task for anything that blocks.
+	 * 
+	 * @throws IllegalStateException if the server is not running
+	 */
+	@Override
+	public ScheduledFuture<?> schedule(Runnable task, long delay, TimeUnit unit) {
+		return runningScheduler().schedule(logged(String.valueOf(task), java.util.Objects.requireNonNull(task, "task")), delay, unit);
+	}
+
+	/**
+	 * Run a task periodically on the server's scheduler until it is cancelled or the server
+	 * stops. An exception in one run is logged and doesn't cancel later runs.
+	 * 
+	 * @throws IllegalStateException if the server is not running
+	 * @see #schedule(Runnable, long, TimeUnit)
+	 */
+	@Override
+	public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, long initialDelay, long period, TimeUnit unit) {
+		return runningScheduler().scheduleAtFixedRate(logged(String.valueOf(task), java.util.Objects.requireNonNull(task, "task")), initialDelay, period, unit);
+	}
+
+	/**
+	 * @return how often (ms) the idle connection check runs (default 5 minutes)
+	 */
+	public long getAdminFrequency() {
+		return adminFreq;
+	}
+
+	/**
+	 * @param milliSeconds how often the idle connection check runs; a running server reschedules it
+	 */
+	public void setAdminFrequency(long milliSeconds) {
+		this.adminFreq = Math.max(1, milliSeconds);
+		ScheduledThreadPoolExecutor exec = scheduler;
+		ScheduledFuture<?> admin = adminTask;
+		if( exec != null && !exec.isShutdown() ) {
+			if( admin != null ) {
+				admin.cancel(false);
+			}
+			scheduleAdmin(exec);
+		}
+	}
+
 	protected void doAdmin() {
 		//  Check for idle connections
 		lastAdmin = System.currentTimeMillis();
@@ -826,7 +1097,8 @@ public class Server extends AbstractCoreServer implements IServer {
 				if( sock == null || sock.isClosed() ) {
 					// Already closed, the processor is exiting or failed to remove itself.
 					it.remove();
-				} else if((lastAdmin-con.getLastReadTime()) > maxIdleConnection  && (lastAdmin-con.getLastWriteTime()) > maxIdleConnection) {
+				} else if((lastAdmin-con.getLastReadTime()) > maxIdleConnection  && (lastAdmin-con.getLastWriteTime()) > maxIdleConnection
+						&& !hasRunningTask(entry.getValue())) {
 					logDebug("Closing idle connection "+sock);
 					it.remove();
 					closeQuietly(con);
@@ -964,6 +1236,8 @@ public class Server extends AbstractCoreServer implements IServer {
 		if( processor == null ) {
 			return;
 		}
+		// The session is over: so are the threads it started (BJL-59)
+		stopTasks(sessionTasks.remove(processor));
 		// Fast path, the connection's current socket is usually the key.
 		IConnection con = processor.getConnection();
 		if( con != null ) {
