@@ -276,6 +276,23 @@ public abstract class Connection extends BaseObject implements IConnection {
 
 	public void close() throws IOException {
 		logDebug("Clossing socket="+socket);
+		SSLSocket tls = sslSocket;
+		if( tls != null && !tls.isClosed() && !tls.isOutputShutdown() ) {
+			/*
+			 * End the TLS session with just a close_notify (RFC 8446 section 6.1). Java's
+			 * close() of a TLS 1.3 socket sends a user_canceled alert first, which GnuTLS
+			 * peers (FileZilla, lftp) report as a fatal alert (BJL-2).
+			 */
+			try {
+				ILineWriter w = writer;
+				if( w != null ) {
+					w.flush();
+				}
+				tls.shutdownOutput();
+			} catch (IOException | UnsupportedOperationException e) {
+				logDebug("TLS shutdown before close failed", e);
+			}
+		}
 		if( reader != null ) {
 			try {
 				reader.close();
