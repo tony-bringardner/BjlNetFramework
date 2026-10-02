@@ -142,7 +142,8 @@
 		<dependency>
 			<groupId>us.bringardner</groupId>
 			<artifactId>bjl_core</artifactId>
-			<version>1.0.0</version>
+			<!-- 1.2.0: multi-release jar with virtual thread support (BJL-6, BJL-51) -->
+			<version>1.2.0-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>us.bringardner</groupId>

@@ -48,6 +48,7 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 
+import us.bringardner.core.BaseThread;
 import us.bringardner.core.ILogger.Level;
 import us.bringardner.core.util.AbstractCoreServer;
 import us.bringardner.net.framework.IConnection;
@@ -204,6 +205,26 @@ public class Server extends AbstractCoreServer implements IServer {
 	 */
 	private volatile boolean noAccessControl;
 	private String serverGreating;
+
+	/**
+	 * Which threads run the sessions (BJL-51). OFF: platform threads, as before. ON: virtual
+	 * threads where the JVM has them (Java 21+), platform threads otherwise. AUTO: virtual
+	 * threads on Java 24 and later only ({@link BaseThread#isVirtualRecommended()}).
+	 * <p>
+	 * Don't use ON on Java 21-23: a virtual thread blocked on socket I/O inside a synchronized
+	 * block holds on to its carrier thread there, and every session waits for its next command
+	 * inside bjl_io's synchronized AbstractLineReader.readLine(). With as many idle sessions as
+	 * CPUs, every carrier thread is held and no other session runs (the server stops
+	 * answering). Java 24 fixed this (JEP 491). A warning is logged when ON is used on 21-23.
+	 */
+	public enum VirtualThreads { OFF, ON, AUTO }
+
+	/** Property for {@link #setVirtualThreads(VirtualThreads)}: OFF, ON or AUTO (any case). */
+	public static final String PROPERTY_VIRTUAL_THREADS = "VirtualThreads";
+	/** The default, so upgrading the framework doesn't change how sessions run. */
+	public static final VirtualThreads DEFAULT_VIRTUAL_THREADS = VirtualThreads.OFF;
+	private volatile VirtualThreads virtualThreads;
+	private volatile boolean warnedVirtualPinning;
 
 
 
@@ -596,6 +617,55 @@ public class Server extends AbstractCoreServer implements IServer {
 		return tmp == null ? -1 : tmp.getLocalPort();
 	}
 
+	/**
+	 * @return the session thread setting: set with {@link #setVirtualThreads(VirtualThreads)},
+	 * else the {@value #PROPERTY_VIRTUAL_THREADS} property, else {@link #DEFAULT_VIRTUAL_THREADS}
+	 */
+	public VirtualThreads getVirtualThreads() {
+		VirtualThreads ret = virtualThreads;
+		if( ret == null ) {
+			ret = DEFAULT_VIRTUAL_THREADS;
+			String tmp = getProperty(PROPERTY_VIRTUAL_THREADS);
+			if( tmp != null && !tmp.trim().isEmpty() ) {
+				try {
+					ret = VirtualThreads.valueOf(tmp.trim().toUpperCase(java.util.Locale.ROOT));
+				} catch (IllegalArgumentException e) {
+					logError("Invalid "+PROPERTY_VIRTUAL_THREADS+" '"+tmp+"', expected OFF, ON or AUTO; using "+ret);
+				}
+			}
+			virtualThreads = ret;
+		}
+		return ret;
+	}
+
+	/**
+	 * Which threads run new sessions; sessions already running keep theirs.
+	 * 
+	 * @param virtualThreads OFF, ON or AUTO; null to read the property again
+	 * @see VirtualThreads
+	 */
+	public void setVirtualThreads(VirtualThreads virtualThreads) {
+		this.virtualThreads = virtualThreads;
+	}
+
+	/**
+	 * @return true if new sessions will run on virtual threads (the setting, and what this JVM can do)
+	 */
+	public boolean isUsingVirtualThreads() {
+		switch (getVirtualThreads()) {
+		case ON:
+			if( BaseThread.isVirtualSupported() && !BaseThread.isVirtualRecommended() && !warnedVirtualPinning ) {
+				warnedVirtualPinning = true;
+				logWarn("VirtualThreads=ON on Java "+Runtime.version().feature()
+						+": sessions blocked in synchronized reads hold their carrier threads before Java 24,"
+						+" so a few idle sessions can stop the server. Use AUTO or Java 24+.");
+			}
+			return BaseThread.isVirtualSupported();
+		case AUTO: return BaseThread.isVirtualRecommended();
+		default: return false;
+		}
+	}
+
 	public boolean isTcpNoDelay() {
 		return tcpNoDelay;
 	}
@@ -681,6 +751,10 @@ public class Server extends AbstractCoreServer implements IServer {
 				}
 			}
 
+			if( proc instanceof BaseThread ) {
+				// Explicit either way, so bjl_core's own default doesn't apply to sessions (BJL-51)
+				((BaseThread) proc).setVirtual(isUsingVirtualThreads());
+			}
 			activeClients.put(socket,proc);
 			proc.start();
 			handedOff = true;
