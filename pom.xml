@@ -148,7 +148,8 @@
 		<dependency>
 			<groupId>us.bringardner</groupId>
 			<artifactId>bjl_io</artifactId>
-			<version>1.0.0</version>
+			<!-- 1.0.1: line reader uses a lock, not synchronized (BJL-55) -->
+			<version>1.0.1-SNAPSHOT</version>
 		</dependency>
 
 		<dependency>

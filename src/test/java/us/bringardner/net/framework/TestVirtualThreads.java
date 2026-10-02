@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import us.bringardner.core.BaseThread;
@@ -102,15 +101,12 @@ public class TestVirtualThreads {
 	}
 
 	/**
-	 * The point of it: many open sessions without a platform thread each. Not on Java 21-23:
-	 * there every idle session pins a carrier thread (synchronized readLine in bjl_io), so the
-	 * server stops answering once there are as many idle sessions as CPUs (see
-	 * Server.VirtualThreads).
+	 * The point of it: many open sessions without a platform thread each. On Java 21-23 this
+	 * stalled with bjl_io 1.0.0: every idle session pinned a carrier thread in the synchronized
+	 * readLine, so the server stopped answering once there were as many sessions as CPUs (BJL-55).
 	 */
 	@Test
 	public void manySessionsFewPlatformThreads() throws Exception {
-		Assumptions.assumeTrue(!BaseThread.isVirtualSupported() || BaseThread.isVirtualRecommended(),
-				"Java 21-23: idle virtual sessions pin their carrier threads");
 		final int sessions = 300;
 		ThreadMXBean mx = ManagementFactory.getThreadMXBean();
 		TestServer svr = server("VtMany");

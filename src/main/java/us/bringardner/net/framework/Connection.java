@@ -51,6 +51,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 
 	private volatile Socket socket;
 	// volatile: close() may be called from another thread (e.g. Server.doAdmin) while the processor is reading
+	private final java.util.concurrent.locks.ReentrantLock writeLinesLock = new java.util.concurrent.locks.ReentrantLock();
 	private volatile ILineReader reader;
 	private volatile ILineWriter writer;
 	private IServer server;
@@ -414,7 +415,10 @@ public abstract class Connection extends BaseObject implements IConnection {
 	@Override
 	public final void writeLines(java.util.List<String> lines) throws IOException {
 		ILineWriter w = openWriter();
-		synchronized (w) {
+		// A lock, not synchronized: the flush can block on a slow client, and on Java 21-23 a
+		// virtual thread blocked inside a monitor pins its carrier thread (BJL-55)
+		writeLinesLock.lock();
+		try {
 			boolean autoFlush = w.isAutoFlush();
 			w.setAutoFlush(false);
 			try {
@@ -425,6 +429,8 @@ public abstract class Connection extends BaseObject implements IConnection {
 				w.setAutoFlush(autoFlush);
 			}
 			w.flush();
+		} finally {
+			writeLinesLock.unlock();
 		}
 	}
 

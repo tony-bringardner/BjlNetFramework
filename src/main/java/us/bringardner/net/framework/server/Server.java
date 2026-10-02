@@ -211,11 +211,12 @@ public class Server extends AbstractCoreServer implements IServer {
 	 * threads where the JVM has them (Java 21+), platform threads otherwise. AUTO: virtual
 	 * threads on Java 24 and later only ({@link BaseThread#isVirtualRecommended()}).
 	 * <p>
-	 * Don't use ON on Java 21-23: a virtual thread blocked on socket I/O inside a synchronized
-	 * block holds on to its carrier thread there, and every session waits for its next command
-	 * inside bjl_io's synchronized AbstractLineReader.readLine(). With as many idle sessions as
-	 * CPUs, every carrier thread is held and no other session runs (the server stops
-	 * answering). Java 24 fixed this (JEP 491). A warning is logged when ON is used on 21-23.
+	 * ON is fine on Java 21-23 with bjl_io 1.0.1 or later: sessions wait for commands in a
+	 * line reader that uses a lock. (bjl_io 1.0.0's reader was synchronized, and on 21-23 a
+	 * virtual thread blocked inside a monitor pins its carrier thread, so the server stopped
+	 * answering once there were as many idle sessions as CPUs; BJL-55.) Commands that block on
+	 * I/O inside their own synchronized code still pin a carrier thread while they do on 21-23;
+	 * Java 24 fixed that (JEP 491), which is why AUTO starts at 24.
 	 */
 	public enum VirtualThreads { OFF, ON, AUTO }
 
@@ -224,7 +225,6 @@ public class Server extends AbstractCoreServer implements IServer {
 	/** The default, so upgrading the framework doesn't change how sessions run. */
 	public static final VirtualThreads DEFAULT_VIRTUAL_THREADS = VirtualThreads.OFF;
 	private volatile VirtualThreads virtualThreads;
-	private volatile boolean warnedVirtualPinning;
 
 
 
@@ -654,12 +654,6 @@ public class Server extends AbstractCoreServer implements IServer {
 	public boolean isUsingVirtualThreads() {
 		switch (getVirtualThreads()) {
 		case ON:
-			if( BaseThread.isVirtualSupported() && !BaseThread.isVirtualRecommended() && !warnedVirtualPinning ) {
-				warnedVirtualPinning = true;
-				logWarn("VirtualThreads=ON on Java "+Runtime.version().feature()
-						+": sessions blocked in synchronized reads hold their carrier threads before Java 24,"
-						+" so a few idle sessions can stop the server. Use AUTO or Java 24+.");
-			}
 			return BaseThread.isVirtualSupported();
 		case AUTO: return BaseThread.isVirtualRecommended();
 		default: return false;
