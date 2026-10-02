@@ -61,6 +61,12 @@ public class Client extends Connection implements IClient {
 	public static final String PROPERTY_CONNECT_TIMEOUT = "connectTimeout";
 
 	private volatile SecureBaseObject context;
+	/**
+	 * The default TLS contexts, one per protocol and trust mode, shared by every Client in the
+	 * JVM. Sessions are cached per context, so a client that reconnects to the same server can
+	 * resume its TLS session (an abbreviated handshake) instead of a full one (BJL-39).
+	 */
+	private static final java.util.concurrent.ConcurrentHashMap<String, SecureBaseObject> SHARED_CONTEXTS = new java.util.concurrent.ConcurrentHashMap<>();
 	private int port;
 	private String host;
 	private volatile boolean connected;
@@ -95,9 +101,19 @@ public class Client extends Connection implements IClient {
 	}
 	
 	
+	/**
+	 * @return the TLS configuration set with {@link #setContext(SecureBaseObject)}, or null if
+	 * this client uses the shared default one
+	 */
 	public SecureBaseObject getContext() {
 		return context;
 	}
+
+	/**
+	 * Use this TLS configuration instead of the shared default. Reuse the same object for
+	 * several clients (or reconnects) to let them resume TLS sessions.
+	 * @param context the configuration, or null for the shared default
+	 */
 	public void setContext(SecureBaseObject context) {
 		this.context = context;
 	}
@@ -285,7 +301,8 @@ public class Client extends Connection implements IClient {
 
 	public synchronized void setTrustAllCertificates(boolean trustAll) {
 		this.trustAllCertificates = trustAll;
-		// Rebuild the context with the new trust managers on the next negotiation
+		// Use the default context for the new trust mode on the next negotiation (as before,
+		// this also drops a context set with setContext)
 		context = null;
 	}
 
@@ -352,27 +369,39 @@ public class Client extends Connection implements IClient {
 		return getHost();
 	}
 
+	/**
+	 * The TLS context for this client: the one set with {@link #setContext(SecureBaseObject)},
+	 * or the shared default for the protocol and trust mode.
+	 * <p>
+	 * The context is reused, not rebuilt: this used to call setProtocol() on every
+	 * negotiation, which throws the SSLContext (and its session cache) away, and every Client
+	 * had its own, so no connection could ever resume a TLS session (BJL-39).
+	 */
 	@Override
 	public SSLContext getSSLContext(String sslOrTsl) throws IOException {
-		
+		String protocol = sslOrTsl == null ? "TLS" : sslOrTsl;
 		SecureBaseObject ctx = context;
-		if( ctx == null ) {
-			synchronized (this) {
-				ctx = context;
-				if( ctx == null ) {
-					ctx = new SecureBaseObject();
-					if( trustAllCertificates ) {
-						ctx.setTrustManagers(new TrustManager[] {new TrustAllManager()});
-					} else {
-						// JVM trust store, then certificates the user has accepted (see DynamicTrustManager.setDefaultValidator).
-						ctx.setTrustManagers(new TrustManager[] {new DynamicTrustManager()});
-					}
-					context = ctx;
+		if( ctx != null ) {
+			synchronized (ctx) {
+				// only when it really changes: setProtocol discards the context
+				if( !protocol.equals(ctx.getProtocol()) ) {
+					ctx.setProtocol(protocol);
 				}
-			}			
+			}
+			return ctx.getSSLContext();
 		}
-		
-		ctx.setProtocol(sslOrTsl);
+		final boolean trustAll = trustAllCertificates;
+		ctx = SHARED_CONTEXTS.computeIfAbsent(protocol+"|"+trustAll, key -> {
+			SecureBaseObject shared = new SecureBaseObject();
+			if( trustAll ) {
+				shared.setTrustManagers(new TrustManager[] {new TrustAllManager()});
+			} else {
+				// JVM trust store, then certificates the user has accepted (see DynamicTrustManager.setDefaultValidator).
+				shared.setTrustManagers(new TrustManager[] {new DynamicTrustManager()});
+			}
+			shared.setProtocol(protocol);
+			return shared;
+		});
 		return ctx.getSSLContext();
 	}
 
