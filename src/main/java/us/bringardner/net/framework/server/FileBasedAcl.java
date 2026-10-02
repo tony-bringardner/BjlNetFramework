@@ -12,6 +12,9 @@ import java.security.spec.KeySpec;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -42,13 +45,72 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 	private static final int HASH_BITS = 256;
 	private static final int SALT_BYTES = 16;
 
+	/*
+	 * Each PBKDF2 hash takes a few hundred ms of CPU by design. Unlimited, a burst of login
+	 * attempts (wrong passwords or made-up user names cost the same) uses every core and slows
+	 * every transfer and session. So only a few run at once; the rest wait their turn (BJL-40).
+	 */
+	/** System property: how many password hashes may run at once (default: half the cores, at least 1) */
+	public static final String PROP_MAX_CONCURRENT_HASHES = "FileBasedAcl.maxConcurrentHashes";
+	/** System property: ms a login waits for its turn before it fails (default 30000) */
+	public static final String PROP_HASH_WAIT_MS = "FileBasedAcl.hashWaitMs";
+	public static final int DEFAULT_HASH_WAIT_MS = 30000;
+
+	private static volatile int maxConcurrentHashes = Math.max(1, Integer.getInteger(PROP_MAX_CONCURRENT_HASHES,
+			Runtime.getRuntime().availableProcessors() / 2));
+	private static volatile Semaphore hashPermits = new Semaphore(maxConcurrentHashes, true);
+	private static volatile long hashWaitMs = Math.max(0, Long.getLong(PROP_HASH_WAIT_MS, DEFAULT_HASH_WAIT_MS));
+	private static final AtomicInteger hashesInProgress = new AtomicInteger();
+
+	/** @return how many password hashes may run at once */
+	public static int getMaxConcurrentHashes() {
+		return maxConcurrentHashes;
+	}
+
+	/**
+	 * @param max how many password hashes may run at once (at least 1). Hashes already running
+	 * or waiting finish under the old limit.
+	 */
+	public static synchronized void setMaxConcurrentHashes(int max) {
+		if( max < 1 ) {
+			throw new IllegalArgumentException("max must be at least 1");
+		}
+		maxConcurrentHashes = max;
+		hashPermits = new Semaphore(max, true);
+	}
+
+	/** @return ms a password check waits for its turn before it fails */
+	public static long getHashWaitMs() {
+		return hashWaitMs;
+	}
+
+	/** @param ms ms a password check waits for its turn before it fails (the login fails) */
+	public static void setHashWaitMs(long ms) {
+		if( ms < 0 ) {
+			throw new IllegalArgumentException("ms must be >= 0");
+		}
+		hashWaitMs = ms;
+	}
+
+	/** @return password hashes running right now (for monitoring and tests) */
+	public static int getHashesInProgress() {
+		return hashesInProgress.get();
+	}
+
 	/**
 	 * @return a salted PBKDF2 hash of the password, suitable for the password field of the user file.
 	 */
 	public static String hashPassword(char[] password) {
 		byte[] salt = new byte[SALT_BYTES];
 		new SecureRandom().nextBytes(salt);
-		byte[] hash = pbkdf2(password, salt, HASH_ITERATIONS, HASH_BITS);
+		Semaphore permits = hashPermits;
+		permits.acquireUninterruptibly();
+		byte[] hash;
+		try {
+			hash = pbkdf2(password, salt, HASH_ITERATIONS, HASH_BITS);
+		} finally {
+			permits.release();
+		}
 		Base64.Encoder enc = Base64.getEncoder();
 		return HASH_PREFIX+HASH_ITERATIONS+":"+enc.encodeToString(salt)+":"+enc.encodeToString(hash);
 	}
@@ -68,19 +130,36 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 			int iterations = Integer.parseInt(parts[0]);
 			byte[] salt = Base64.getDecoder().decode(parts[1]);
 			byte[] expected = Base64.getDecoder().decode(parts[2]);
-			byte[] actual = pbkdf2(password, salt, iterations, expected.length*8);
+			// Wait for a turn; a login that can't get one in time fails (the client can retry)
+			Semaphore permits = hashPermits;
+			if( !permits.tryAcquire(hashWaitMs, TimeUnit.MILLISECONDS) ) {
+				return false;
+			}
+			byte[] actual;
+			try {
+				actual = pbkdf2(password, salt, iterations, expected.length*8);
+			} finally {
+				permits.release();
+			}
 			return MessageDigest.isEqual(expected, actual);
 		} catch (IllegalArgumentException e) {
+			return false;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 			return false;
 		}
 	}
 
+	/** Caller holds a permit from hashPermits. */
 	private static byte[] pbkdf2(char[] password, byte[] salt, int iterations, int bits) {
+		hashesInProgress.incrementAndGet();
 		try {
 			KeySpec spec = new PBEKeySpec(password, salt, iterations, bits);
 			return SecretKeyFactory.getInstance(HASH_ALGORITHM).generateSecret(spec).getEncoded();
 		} catch (GeneralSecurityException e) {
 			throw new IllegalStateException(HASH_ALGORITHM+" not available", e);
+		} finally {
+			hashesInProgress.decrementAndGet();
 		}
 	}
 
