@@ -157,8 +157,8 @@
 		<dependency>
 			<groupId>us.bringardner</groupId>
 			<artifactId>bjl_io</artifactId>
-			<!-- 1.0.1: line reader uses a lock, not synchronized (BJL-55) -->
-			<version>1.0.1-SNAPSHOT</version>
+			<!-- 1.1.0: line reader uses a lock, not synchronized (BJL-55); keeps a line interrupted by a timeout -->
+			<version>1.1.0</version>
 		</dependency>
 
 		<dependency>
