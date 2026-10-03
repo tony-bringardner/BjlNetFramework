@@ -31,10 +31,10 @@ import java.net.SocketException;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
+import us.bringardner.core.util.TlsSockets;
 import us.bringardner.core.BaseObject;
 import us.bringardner.core.SecureBaseObject;
 import us.bringardner.io.AbstractLineReader;
@@ -131,7 +131,8 @@ public abstract class Connection extends BaseObject implements IConnection {
 		SSLSocketFactory factory = ctx.getSocketFactory();
 		Socket plain = getSocket();
 		boolean clientMode = isClientMode();
-		SSLSocket tmp = (SSLSocket)factory.createSocket(plain, clientMode ? getPeerHost() : null, plain.getPort(), false);
+		//  The host name check is made by configureClientSsl (below), which subclasses may change
+		SSLSocket tmp = TlsSockets.layer(ctx, plain, getPeerHost(), clientMode, false, false);
 		// Some clients don;t support v1.3
 		String force = System.getProperty(SecureBaseObject.PROPERTY_FORCE_TLS_VERSION);
 		if( force != null) {
@@ -141,7 +142,6 @@ public abstract class Connection extends BaseObject implements IConnection {
 			}
 		}
 
-		tmp.setUseClientMode(clientMode);
 		if( clientMode ) {
 			configureClientSsl(tmp);
 		} else {
@@ -183,9 +183,7 @@ public abstract class Connection extends BaseObject implements IConnection {
 	 */
 	protected void configureClientSsl(SSLSocket sock) {
 		if( isVerifyHostname() && getPeerHost() != null ) {
-			SSLParameters params = sock.getSSLParameters();
-			params.setEndpointIdentificationAlgorithm("HTTPS");
-			sock.setSSLParameters(params);
+			TlsSockets.configureClient(sock, getPeerHost(), true);
 		}
 	}
 	

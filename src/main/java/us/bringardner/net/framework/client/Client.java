@@ -29,15 +29,13 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
+import us.bringardner.core.util.TrustAllCertificates;
 import us.bringardner.core.SecureBaseObject;
 import us.bringardner.net.framework.Connection;
 
@@ -394,7 +392,7 @@ public class Client extends Connection implements IClient {
 		ctx = SHARED_CONTEXTS.computeIfAbsent(protocol+"|"+trustAll, key -> {
 			SecureBaseObject shared = new SecureBaseObject();
 			if( trustAll ) {
-				shared.setTrustManagers(new TrustManager[] {new TrustAllManager()});
+				shared.setTrustManagers(TrustAllCertificates.trustManagers());
 			} else {
 				// JVM trust store, then certificates the user has accepted (see DynamicTrustManager.setDefaultValidator).
 				shared.setTrustManagers(new TrustManager[] {new DynamicTrustManager()});
@@ -405,19 +403,5 @@ public class Client extends Connection implements IClient {
 		return ctx.getSSLContext();
 	}
 
-	/**
-	 * Accepts every certificate. Only used when setTrustAllCertificates(true).
-	 */
-	private static class TrustAllManager implements X509TrustManager {
-		public X509Certificate[] getAcceptedIssuers() {
-			return new X509Certificate[0];
-		}
-
-		public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-		}
-
-		public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-		}
-	}
 
 }
