@@ -165,4 +165,35 @@ public class TestServerLimits {
 			ServerTestSupport.stop(svr);
 		}
 	}
+
+	/** @return the server side of the only active client */
+	private static java.net.Socket serverSide(TestServer svr) throws Exception {
+		ServerTestSupport.waitFor(() -> svr.getActiveClients().size() == 1, 5000, "client not accepted");
+		return svr.getActiveClients().keySet().iterator().next();
+	}
+
+	@Test
+	public void testKeepAliveOffByDefault() throws Exception {
+		TestServer svr = ServerTestSupport.create("NoKeepAliveServer", ServerTestSupport.standardCommands(), null);
+		ServerTestSupport.start(svr);
+		try (CommandClient client = ServerTestSupport.connect(svr)) {
+			assertEcho(client);
+			assertFalse(serverSide(svr).getKeepAlive());
+		} finally {
+			ServerTestSupport.stop(svr);
+		}
+	}
+
+	@Test
+	public void testKeepAlive() throws Exception {
+		TestServer svr = ServerTestSupport.create("KeepAliveServer", ServerTestSupport.standardCommands(), null);
+		svr.setKeepAlive(true);
+		ServerTestSupport.start(svr);
+		try (CommandClient client = ServerTestSupport.connect(svr)) {
+			assertEcho(client);
+			assertTrue(serverSide(svr).getKeepAlive(), "accepted sockets should have SO_KEEPALIVE");
+		} finally {
+			ServerTestSupport.stop(svr);
+		}
+	}
 }

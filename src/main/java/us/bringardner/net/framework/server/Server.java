@@ -676,6 +676,8 @@ public class Server extends AbstractCoreServer implements IServer {
 		}
 	}
 
+	//  Overrides bjl_core's AbstractCoreServer (which defaults to false): this server defaults to true
+	@Override
 	public boolean isTcpNoDelay() {
 		return tcpNoDelay;
 	}
@@ -683,6 +685,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	/**
 	 * Set TCP_NODELAY on accepted sockets (default true).
 	 */
+	@Override
 	public void setTcpNoDelay(boolean tcpNoDelay) {
 		this.tcpNoDelay = tcpNoDelay;
 	}
@@ -735,6 +738,15 @@ public class Server extends AbstractCoreServer implements IServer {
 					socket.setTcpNoDelay(true);
 				} catch (SocketException e) {
 					logDebug("Can't set TCP_NODELAY", e);
+				}
+			}
+
+			if( isKeepAlive() ) {
+				// KeepAlive property (bjl_core, default false): notice clients that vanish without closing
+				try {
+					socket.setKeepAlive(true);
+				} catch (SocketException e) {
+					logDebug("Can't set SO_KEEPALIVE", e);
 				}
 			}
 
