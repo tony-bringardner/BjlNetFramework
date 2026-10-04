@@ -20,7 +20,7 @@ The artifact is published to GitHub Packages:
 <dependency>
     <groupId>us.bringardner</groupId>
     <artifactId>bjl_net_framework</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
@@ -162,7 +162,7 @@ alice,   {PBKDF2}210000:..., ECHO|LOGIN,  home=/home/alice
 Store hashed passwords rather than plain text. Create the hash with
 
 ```
-java -cp bjl_net_framework-1.0.0.jar:bjl_core-1.0.0.jar us.bringardner.net.framework.server.FileBasedAcl 'the password'
+java -cp bjl_net_framework-1.1.0.jar:bjl_core-1.3.0.jar us.bringardner.net.framework.server.FileBasedAcl 'the password'
 ```
 
 A login command calls `processor.getServer().authenticate(user, password)` and
