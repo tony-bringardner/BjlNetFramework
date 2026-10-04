@@ -21,6 +21,7 @@ import javax.crypto.spec.PBEKeySpec;
 
 import us.bringardner.core.BaseObject;
 import us.bringardner.net.framework.server.IPrincipal.State;
+import us.bringardner.io.IoUtils;
 
 
 /**
@@ -241,10 +242,7 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 				}
 			}
 		} finally {
-			try {
-				in.close();
-			} catch (Exception e) {
-			}
+			IoUtils.closeQuietly(in);
 		}
 	}
 

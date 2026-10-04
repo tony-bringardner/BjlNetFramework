@@ -60,6 +60,8 @@ import us.bringardner.net.framework.IConnectionFactory;
 import us.bringardner.net.framework.IProcessor;
 import us.bringardner.net.framework.IProcessorFactory;
 import us.bringardner.net.framework.server.IPrincipal.State;
+import us.bringardner.core.NamedThreadFactory;
+import us.bringardner.io.IoUtils;
 
 public class Server extends AbstractCoreServer implements IServer {
 
@@ -591,11 +593,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		super.stop();
 		ServerSocket s = svr;
 		if( s != null ) {
-			try {
-				s.close();
-			} catch (IOException e) {
-				// already closed
-			}
+			IoUtils.closeQuietly(s);
 		}
 	}
 
@@ -616,10 +614,7 @@ public class Server extends AbstractCoreServer implements IServer {
 			ret.setReuseAddress(isReuseAddress());
 			ret.bind(new InetSocketAddress(getPort()), getBacklog());
 		} catch (IOException e) {
-			try {
-				ret.close();
-			} catch (Exception e2) {
-			}
+			IoUtils.closeQuietly(ret);
 			throw e;
 		}
 		return ret;
@@ -786,7 +781,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		} finally {
 			if( !handedOff ) {
 				activeClients.remove(socket);
-				closeQuietly(socket);
+				IoUtils.closeQuietly(socket);
 			}
 		}
 	}
@@ -808,23 +803,7 @@ public class Server extends AbstractCoreServer implements IServer {
 		}
 	}
 
-	private static void closeQuietly(Socket socket) {
-		if( socket != null ) {
-			try {
-				socket.close();
-			} catch (Exception e) {
-			}
-		}
-	}
 
-	private static void closeQuietly(IConnection con) {
-		if( con != null ) {
-			try {
-				con.close();
-			} catch (Exception e) {
-			}
-		}
-	}
 
 	/**
 	 * Close all in process clients
@@ -833,14 +812,11 @@ public class Server extends AbstractCoreServer implements IServer {
 	 */
 	private void close(ServerSocket svr) {
 		for (IProcessor element : activeClients.values()) {
-			closeQuietly(element.getConnection());
+			IoUtils.closeQuietly(element.getConnection());
 		}
 		activeClients.clear();
 
-		try {
-			svr.close();
-		} catch (Exception e) {
-		}
+		IoUtils.closeQuietly(svr);
 
 	}
 
@@ -999,11 +975,7 @@ public class Server extends AbstractCoreServer implements IServer {
 	// ------------------------------------------------------------------ scheduler (BJL-59)
 
 	private void startScheduler() {
-		ScheduledThreadPoolExecutor exec = new ScheduledThreadPoolExecutor(1, r -> {
-			Thread t = new Thread(r, getName()+"-scheduler");
-			t.setDaemon(true);
-			return t;
-		});
+		ScheduledThreadPoolExecutor exec = new ScheduledThreadPoolExecutor(1, new NamedThreadFactory(getName()+"-scheduler"));
 		exec.setRemoveOnCancelPolicy(true);
 		exec.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
 		exec.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
@@ -1113,13 +1085,13 @@ public class Server extends AbstractCoreServer implements IServer {
 						&& !hasRunningTask(entry.getValue())) {
 					logDebug("Closing idle connection "+sock);
 					it.remove();
-					closeQuietly(con);
+					IoUtils.closeQuietly(con);
 				}
 			} catch (Throwable e) {
 				// One bad entry must not stop the idle check for everyone else.
 				logDebug("Error in doAdmin for "+entry.getKey(), e);
 				it.remove();
-				closeQuietly(entry.getValue().getConnection());
+				IoUtils.closeQuietly(entry.getValue().getConnection());
 			}
 		}
 	}

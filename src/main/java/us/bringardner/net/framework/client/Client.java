@@ -38,6 +38,7 @@ import javax.net.ssl.TrustManager;
 import us.bringardner.core.util.TrustAllCertificates;
 import us.bringardner.core.SecureBaseObject;
 import us.bringardner.net.framework.Connection;
+import us.bringardner.io.IoUtils;
 
 
 
@@ -198,20 +199,12 @@ public class Client extends Connection implements IClient {
 		} catch (IOException e) {
 			logError("Can't Connect to "+getHost()+":"+getPort(),e);
 			lastConnectError = e;
-			closeQuietly(sock);
+			IoUtils.closeQuietly(sock);
 		}
 
 		return connected;
 	}
 
-	private static void closeQuietly(Socket sock) {
-		if( sock != null ) {
-			try {
-				sock.close();
-			} catch (Exception e) {
-			}
-		}
-	}
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.net.framework.client.IClient#close()

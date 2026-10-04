@@ -46,6 +46,7 @@ import us.bringardner.io.LFLineReader;
 import us.bringardner.io.LFLineWriter;
 import us.bringardner.net.framework.server.IServer;
 import us.bringardner.net.framework.server.Server;
+import us.bringardner.io.IoUtils;
 
 public abstract class Connection extends BaseObject implements IConnection {
 
@@ -293,35 +294,19 @@ public abstract class Connection extends BaseObject implements IConnection {
 			}
 		}
 		if( reader != null ) {
-			try {
-				reader.close();
-			} catch (IOException e) {
-				// Ignore error here
-			}
+			IoUtils.closeQuietly(reader);
 			reader = null;
 		}
 		if( writer != null ) {
-			try {
-				writer.close();
-			} catch (IOException e) {
-				// Ingore error here
-			}
+			IoUtils.closeQuietly(writer);
 			writer = null;
 		}
 		if( sslSocket != null ) {
-			try {
-				sslSocket.close();
-			} catch (IOException e) {
-				// Ingore error here
-			}
+			IoUtils.closeQuietly(sslSocket);
 			sslSocket = null;
 		}
 		if( socket != null ) {
-			try {
-				socket.close();
-			} catch (IOException e) {
-				// Ingore error here
-			}
+			IoUtils.closeQuietly(socket);
 			socket = null;
 		}
 	}

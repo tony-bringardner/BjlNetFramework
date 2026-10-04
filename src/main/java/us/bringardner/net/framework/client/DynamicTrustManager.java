@@ -56,6 +56,7 @@ import javax.net.ssl.X509TrustManager;
 
 import us.bringardner.core.BaseObject;
 import us.bringardner.net.framework.client.DynamicTrustManager.CertificateValidator.ManageAs;
+import us.bringardner.core.util.Hex;
 
 /**
  * Server certificate trust for clients.
@@ -304,11 +305,7 @@ public class DynamicTrustManager extends X509ExtendedTrustManager {
 	private static String fingerprint(X509Certificate cert) throws CertificateException {
 		try {
 			byte[] digest = MessageDigest.getInstance("SHA-256").digest(cert.getEncoded());
-			StringBuilder ret = new StringBuilder(digest.length*2);
-			for (byte b : digest) {
-				ret.append(String.format("%02x", b & 0xff));
-			}
-			return ret.toString();
+			return Hex.encode(digest);
 		} catch (NoSuchAlgorithmException | CertificateEncodingException e) {
 			throw new CertificateException(e);
 		}
