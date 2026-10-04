@@ -1,5 +1,75 @@
 # Changelog
 
+## 1.1.0 (unreleased)
+
+Requires `bjl_core` 1.3.0 and `bjl_io` 1.1.0 (published to GitHub Packages; the pom now names the
+repository, so a build no longer needs it in `~/.m2/settings.xml`). Nothing is removed or
+incompatible; see Changed for behaviour to be aware of.
+
+### Added
+
+- **Session tasks and a scheduler (BJL-59).** `Server.startTask(session, thread)` starts a thread that
+  belongs to a session: it runs on the same kind of thread as sessions, gets a name, keeps the idle
+  check from closing its session, and is stopped when the session ends or the server stops
+  (`setTaskStopWait()`, default 5 seconds). `schedule()` and `scheduleAtFixedRate()` run work on the
+  server's own scheduler thread. `IServer` has default versions for servers that don't manage tasks.
+- **Virtual threads for sessions (BJL-51).** `Server.setVirtualThreads(OFF | ON | AUTO)` or the
+  `VirtualThreads` property. OFF (the default) is unchanged; ON uses virtual threads on Java 21+;
+  AUTO only on Java 24+. Safe on Java 21-23 with `bjl_io` 1.0.1 or later (its line reader uses a lock).
+- **Pipelining (BJL-43).** `CommandClient.executeCommands(list)` sends several commands at once (at
+  most `MAX_PIPELINED`, 64, per batch) and reads the replies in order, one round trip per batch
+  instead of per command (for example SMTP PIPELINING, RFC 2920). `ICommandClient` has a default
+  that runs them one at a time.
+- **Multi-line replies in one write (BJL-41).** `Connection.writeLines(list)` /
+  `IConnection.writeLines` and `AbstractCommandProcessor.reply(list)` send several lines with one
+  flush, so a `211-` ... `211 End` reply goes out as one TCP segment or TLS record, not one per line.
+- **TLS session resumption for clients (BJL-39).** Clients share one TLS context per protocol and trust
+  mode, so a client that reconnects to the same server resumes its session instead of a full
+  handshake. `Client.setContext()` / `getContext()` give a group of clients their own context.
+- **A limit on concurrent password hashing (BJL-40).** Each PBKDF2 check takes a few hundred
+  milliseconds of CPU by design, so a burst of logins could use every core. `FileBasedAcl` runs at most
+  `setMaxConcurrentHashes()` at once (default half the cores) and a login waits up to `setHashWaitMs()`
+  (default 30 seconds) for its turn (properties `FileBasedAcl.maxConcurrentHashes` and
+  `FileBasedAcl.hashWaitMs`).
+- **Keep-alive.** Accepted sockets get SO_KEEPALIVE when `bjl_core`'s `KeepAlive` setting is on
+  (`setKeepAlive(true)`, default off), so clients that vanish without closing are noticed.
+
+### Fixed
+
+- **STARTTLS / AUTH TLS used a new TLS context for every upgrade (BJL-38).** `getSSLContext(name)`
+  switched the server's protocol to the name the client sent, built a context and switched back:
+  the server's main context was thrown away each time, no session could be resumed (so FTP data
+  connections couldn't resume the control session), and another thread could get the wrong context
+  during the switch. Every upgrade now uses the server's one context.
+- **Without an access control provider, every command took the server lock** to look the provider
+  property up again and logged "No access control defined" (BJL-42). It is now looked up and logged once.
+- **TLS sessions ended with a `user_canceled` alert** before `close_notify` (Java's close of a TLS 1.3
+  socket), which GnuTLS clients such as FileZilla and lftp report as a fatal error (BJL-2). Only
+  `close_notify` is sent now.
+- The connection's write lock is a lock, not `synchronized`, so a virtual thread flushing to a slow
+  client doesn't hold on to its carrier thread on Java 21-23 (BJL-55).
+
+### Changed (may need a code change)
+
+- `Server.getSSLContext(name)` accepts only TLS or SSL mechanism names (`TLS`, `SSL`, `TLS-C`,
+  `TLS-P`, `TLSv1.3` ...); anything else throws `IOException`. The name no longer selects a TLS
+  version: use the socket's enabled protocols (for example `SecureBaseObject.PROPERTY_FORCE_TLS_VERSION`).
+- `doAdmin()` (the idle connection check) runs on the server's scheduler thread instead of between
+  accepts. A subclass that overrides it now runs on that thread.
+- Under a burst of logins, a password check can fail after waiting `hashWaitMs` for its turn (the
+  client can retry), instead of every login slowing every session.
+- `Connection`'s TLS upgrade and `Client.setTrustAllCertificates(true)` use `bjl_core`'s `TlsSockets`
+  and `TrustAllCertificates`. Behaviour is unchanged.
+
+## 1.0.1
+
+### Fixed
+
+- `Server.stop()` only set `stopping`, so a server waiting in `accept()` kept running until the accept
+  timeout (5 seconds by default). It now closes the listening socket, so it stops at once.
+- A stopped `Server` could not be started again: it kept the closed listening socket. A new one is
+  created on the next start.
+
 ## 1.0.0
 
 First stable release. It contains breaking changes from 0.1.x; see
