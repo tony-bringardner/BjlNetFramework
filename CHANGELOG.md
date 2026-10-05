@@ -49,6 +49,13 @@ incompatible; see Changed for behaviour to be aware of.
 - The connection's write lock is a lock, not `synchronized`, so a virtual thread flushing to a slow
   client doesn't hold on to its carrier thread on Java 21-23 (BJL-55).
 
+### Deprecated
+
+- `Server.getSSLContext(protocol, algorithm, keyStoreType, password, keyFile)`: set the key store on the
+  server (`setKeyStoreFileName`, `setKeyStorePassword` ...) and use `getSSLContext()`, or configure a
+  `bjl_core` `SecureBaseObject`. It now does the latter itself instead of loading the key store with its
+  own code; the result is the same.
+
 ### Changed (may need a code change)
 
 - `Server.getSSLContext(name)` accepts only TLS or SSL mechanism names (`TLS`, `SSL`, `TLS-C`,
