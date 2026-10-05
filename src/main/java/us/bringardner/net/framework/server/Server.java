@@ -25,8 +25,6 @@
  */
 package us.bringardner.net.framework.server;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
@@ -34,7 +32,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.security.KeyStore;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -48,7 +45,6 @@ import java.util.regex.Pattern;
 
 import javax.net.ServerSocketFactory;
 import javax.net.SocketFactory;
-import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 
@@ -61,6 +57,7 @@ import us.bringardner.net.framework.IProcessor;
 import us.bringardner.net.framework.IProcessorFactory;
 import us.bringardner.net.framework.server.IPrincipal.State;
 import us.bringardner.core.NamedThreadFactory;
+import us.bringardner.core.SecureBaseObject;
 import us.bringardner.io.IoUtils;
 
 public class Server extends AbstractCoreServer implements IServer {
@@ -368,42 +365,36 @@ public class Server extends AbstractCoreServer implements IServer {
 
 
 
+	/**
+	 * Build a TLS context from a key store file, separately from this server's own settings.
+	 *
+	 * @param sslOrTls the SSLContext protocol, e.g. "TLS"
+	 * @param instanceName the key manager algorithm, e.g. "SunX509" or "PKIX"
+	 * @param keyStoreType e.g. "PKCS12"
+	 * @param passPhrase the key store (and key) password
+	 * @param keyFileName the key store file
+	 * @return a new SSLContext with the key store's keys and the JVM's default trust managers
+	 * @throws IOException if the file is missing, the password is wrong or the context can't be made
+	 * @deprecated set the key store on the server instead ({@code setKeyStoreFileName},
+	 *  {@code setKeyStorePassword}, {@code setKeyStoreType}, {@code setAlgorithm}, {@code setProtocol})
+	 *  and use {@link #getSSLContext()}, or configure a bjl_core SecureBaseObject. This now does
+	 *  exactly that instead of loading the key store with its own code.
+	 */
+	@Deprecated
 	public SSLContext getSSLContext(String sslOrTls, String instanceName, String keyStoreType, String passPhrase, String keyFileName) throws IOException {
-
-		SSLContext ret;
-		KeyManagerFactory kmf;
-		KeyStore ks;
-		//String name = getName();
-		try {
-
-			ret = SSLContext.getInstance(sslOrTls);
-
-			kmf = KeyManagerFactory.getInstance(instanceName);
-			ks = KeyStore.getInstance(keyStoreType);
-
-			char[] passphrase = passPhrase.toCharArray();
-
-			File f = new File(keyFileName);
-
-			if( f.exists() == false) {
-				throw new IllegalArgumentException("Key file not found ("+f+")");
-			}
-
-			try(FileInputStream in = new FileInputStream(f)) {
-				ks.load(in, passphrase);
-			}
-
-
-			kmf.init(ks, passphrase);
-
-			ret.init(kmf.getKeyManagers(), null, null);
-		} catch (Exception e) {
-			throw new IOException(e);
+		if( passPhrase == null ) {
+			//  Without a password SecureBaseObject makes a context with no keys; this always needed one
+			throw new IOException("A key store password is required");
 		}
-
-
-		return ret;
-
+		SecureBaseObject sbo = new SecureBaseObject();
+		sbo.setProtocol(sslOrTls);
+		sbo.setAlgorithm(instanceName);
+		sbo.setKeyStoreType(keyStoreType);
+		sbo.setKeyStoreFileName(keyFileName);
+		sbo.setKeyStorePassword(passPhrase);
+		//  The JVM's default trust managers, as before (not SecureBaseObject's shared default)
+		sbo.setTrustManagers(null);
+		return sbo.getSSLContext();
 	}
 
 	/**
