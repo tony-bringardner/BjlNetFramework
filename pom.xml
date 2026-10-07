@@ -6,7 +6,7 @@
 	<groupId>us.bringardner</groupId>
 	<artifactId>bjl_net_framework</artifactId>
 	<name>Network Framework</name>
-	<description>A framework for implementing line based network protocols (FTP, SMTP, POP3, ...), client and server</description>
+	<description>A framework for implementing network protocols, client and server: line based (FTP, SMTP, POP3, ...) on blocking sockets, and any protocol on non-blocking (NIO) channels</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

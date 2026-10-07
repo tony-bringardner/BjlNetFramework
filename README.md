@@ -7,6 +7,10 @@ and text.
 The framework handles the sockets, threads, TLS (from the first byte or with STARTTLS),
 authentication, time-outs and limits. You write the commands.
 
+For protocols that don't take turns (both ends send at any time, or many channels share one
+connection, such as SSH), the `nio` package has a non-blocking server and client: see
+[Non-blocking (NIO)](#non-blocking-nio).
+
 - Java 11 or later
 - Depends on [`bjl_core`](https://github.com/tony-bringardner/BjlCore) and
   [`bjl_io`](https://github.com/tony-bringardner/BjlIo)
@@ -168,6 +172,39 @@ java -cp bjl_net_framework-1.1.0.jar:bjl_core-1.3.0.jar us.bringardner.net.frame
 A login command calls `processor.getServer().authenticate(user, password)` and
 `processor.setPrincipal(...)`. Commands whose `requiresAuthorization()` is true then run only
 if the principal has the command's permission; otherwise the client gets "not authorized".
+
+## Non-blocking (NIO)
+
+*Preview: the API may still change.*
+
+The `us.bringardner.net.framework.nio` package serves many connections from a few selector
+threads instead of a thread per connection. Nothing blocks: input arrives as frames, writes are
+queued.
+
+| | |
+|---|---|
+| `NioServer` | Accepts on a non-blocking channel and hands connections to its `NioReactor`s. An `AbstractCoreServer`, so the usual properties (Port, MaxConnections, key store...) configure it. |
+| `NioClient` | Non-blocking connects (`connect` returns a `CompletableFuture`, or `connectAndWait`). |
+| `INioHandlerFactory` → `INioHandler` | Your protocol: `onConnect`, `onMessage`, `onIdle`, `onError`, `onClose`. One call at a time per connection. |
+| `IFrameDecoder` | Splits the input: `LineFrameDecoder`, `LengthFieldFrameDecoder`, `RawFrameDecoder`, or your own. A handler can switch decoders between frames. |
+| `INioConnection` | `write`, `closeAfterFlush`, `startTls`, `pauseReading` / `resumeReading`, the logged in principal, attributes. |
+
+```java
+NioServer server = new NioServer(2222, "echo");
+server.setDecoderFactory(LineFrameDecoder::new);
+server.setHandlerFactory(() -> (connection, frame) ->
+        connection.writeLine("echo " + LineFrameDecoder.toString(frame)));
+server.startAndWait(5000);
+```
+
+Handlers run on the reactor threads, so they must not block; give the server a handler executor
+(`setHandlerExecutor`) when they do (file I/O, password hashing...). TLS uses the same
+`SecureBaseObject` settings as `Server`: `setSecure(true)` for TLS from the first byte, or
+`connection.startTls()` after a STARTTLS style command. `NioServer.authenticate()` uses the same
+access control list as `Server`.
+
+For request / response protocols (FTP, SMTP, POP3) the blocking `Server` is simpler, and with
+virtual threads (Java 21+) it serves many idle sessions just as cheaply.
 
 ## Configuration
 

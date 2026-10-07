@@ -52,7 +52,7 @@ public class TestFileBasedAcl {
 		validateAcl(serverName);
 	}
 
-	/** Initialized by name, for servers that are not an IServer (e.g. a non-blocking server) */
+	/** Initialized by name, for servers that are not an IServer (e.g. nio.NioServer) */
 	@Test
 	public void testInitializeByName() throws Exception {
 		String serverName = "TestSetver";

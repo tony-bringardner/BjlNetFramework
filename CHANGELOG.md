@@ -2,15 +2,28 @@
 
 ## 1.1.0 (unreleased)
 
-Requires `bjl_core` 1.3.0 and `bjl_io` 1.1.0 (published to GitHub Packages; the pom now names the
+Requires `bjl_core` 1.3.1 and `bjl_io` 1.1.0 (published to GitHub Packages; the pom now names the
 repository, so a build no longer needs it in `~/.m2/settings.xml`). Nothing is removed or
 incompatible; see Changed for behaviour to be aware of.
 
 ### Added
 
+- **A non-blocking (NIO) framework, package `nio` (preview: the API may still change).** For
+  protocols where both ends send at any time or many channels share one connection (SSH, WebSocket,
+  MQTT...), and for many connections on Java 11-20 without a thread each. `NioServer` (an
+  `AbstractCoreServer`, configured by the same properties) accepts on a non-blocking channel and
+  serves its connections from a few `NioReactor` selector threads; `NioClient` connects the same way.
+  Input is split into frames by an `IFrameDecoder` (`LineFrameDecoder`, `LengthFieldFrameDecoder`,
+  `RawFrameDecoder`), which a handler can change between frames, and passed to an `INioHandler`
+  (`onConnect`, `onMessage`, `onIdle`, `onError`, `onClose`): one call at a time per connection, on
+  the reactor thread or a handler executor. Writes are queued, with `getPendingWriteBytes()` and
+  `pauseReading()` / `resumeReading()` for flow control. TLS uses `SSLEngine` with the server's or
+  client's `SecureBaseObject` settings: from the first byte (`setSecure(true)`) or `startTls()` for
+  STARTTLS. Logins use the same `IAccessControlList` as `Server`. The blocking `Server` remains the
+  simpler choice for request / response protocols, with virtual threads on Java 21+.
 - **Access control without an `IServer`.** `IAccessControlList.initialize(String serverName)` sets up
-  an access control list for a server known only by name (for example a non-blocking
-  server). `FileBasedAcl` and `PropertyAuthenticator` implement it and their
+  an access control list for a server known only by name (for example the non-blocking
+  `nio.NioServer`). `FileBasedAcl` and `PropertyAuthenticator` implement it and their
   `initialize(IServer)` calls it; the interface's default throws `UnsupportedOperationException`, so
   existing implementations still compile. The read only principal `Server.authenticate()` returns is
   now the public class `ImmutablePrincipal`, so other servers can hand out the same kind.
