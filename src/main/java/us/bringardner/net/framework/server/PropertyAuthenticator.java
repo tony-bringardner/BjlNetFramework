@@ -47,8 +47,7 @@ public class PropertyAuthenticator extends FileBasedAcl  {
 	
 	
 	@Override
-	public void initialize(IServer server) throws IOException {		
-		String name = server.getName();
+	public void initialize(String name) throws IOException {
 		if( name != null && !name.isEmpty()) {
 			setPropertyPrefix(name);
 		}

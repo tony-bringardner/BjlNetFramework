@@ -32,9 +32,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
@@ -62,98 +60,6 @@ import us.bringardner.io.IoUtils;
 
 public class Server extends AbstractCoreServer implements IServer {
 
-	private static class ImmutablePrincipal implements IPrincipal {
-
-		IPrincipal target ;
-		State state = State.Authenticated;
-		
-		ImmutablePrincipal (IPrincipal tmp) {
-			this.target = tmp;
-		}
-
-
-		@Override
-		public boolean authenticate(byte[] credentials) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-		}
-
-		@Override
-		public State getState() {
-			return state;
-		}
-
-		@Override
-		public void setState(State state) {
-			this.state= state;	
-		}
-
-		@Override
-		public byte[] getCredentials() {
-			throw new UnsupportedOperationException("Credentials are not visible here");			
-		}
-
-		@Override
-		public void setCredentials(byte[] credentials) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public void add(IPermission permission) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public boolean hasPermission(IPermission permision) {			
-			return target.hasPermission(permision);
-		}
-
-		@Override
-		public boolean remove(IPermission permission) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-		}
-
-		@Override
-		public List<IPermission> getPermisssions() {			
-			return Collections.unmodifiableList(target.getPermissions());
-		}
-
-		@Override
-		public void setPermissions(List<IPermission> permissions) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public Object getParameter(Object key) {			
-			return target.getParameter(key);
-		}
-
-		@Override
-		public Object removeParameter(Object key) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-		}
-
-		@Override
-		public void setParameter(Object key, Object value) {
-			throw new UnsupportedOperationException("This is an imutable principal");			
-		}
-
-		@Override
-		public Map<Object, Object> getParameters() {
-			return Collections.unmodifiableMap(target.getParameters());
-		}
-
-		@Override
-		public void setParameters(Map<Object, Object> parameters) {
-			throw new UnsupportedOperationException("This is an imutable principal");
-
-		}
-
-		@Override
-		public String getName() {			
-			return target.getName();
-		}
-
-	}
 	/**
 	 * 
 	 */

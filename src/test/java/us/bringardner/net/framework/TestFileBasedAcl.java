@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import us.bringardner.net.framework.server.FileBasedAcl;
 import us.bringardner.net.framework.server.IAccessControlList;
 import us.bringardner.net.framework.server.IPermission;
 import us.bringardner.net.framework.server.IPrincipal;
+import us.bringardner.net.framework.server.ImmutablePrincipal;
 import us.bringardner.net.framework.server.IServer;
 import us.bringardner.net.framework.server.PropertyAuthenticator;
 import us.bringardner.net.framework.server.Server;
@@ -48,6 +50,30 @@ public class TestFileBasedAcl {
 		System.setProperty(serverName+".userFile","FileBasedAcl.txt");
 		
 		validateAcl(serverName);
+	}
+
+	/** Initialized by name, for servers that are not an IServer (e.g. a non-blocking server) */
+	@Test
+	public void testInitializeByName() throws Exception {
+		String serverName = "TestSetver";
+		System.setProperty(serverName+".user0","echoUser, password  , Echo|Login, key1=val1|key2=val2");
+		System.setProperty(serverName+".user1","user1  , password   , one|two|three|four|five, key3=val3|key4=val4");
+		PropertyAuthenticator acl = new PropertyAuthenticator();
+		acl.initialize(serverName);
+		IPrincipal p = acl.getPrincipal("user1");
+		assertNotNull(p, "user1 not found");
+		assertTrue(p.authenticate("password".getBytes()), "user1 was not authenticated");
+
+		System.setProperty(serverName+".userFile","FileBasedAcl.txt");
+		FileBasedAcl file = new FileBasedAcl();
+		file.initialize(serverName);
+		assertNotNull(file.getPrincipal("echoUser"), "echoUser not found");
+
+		// The principal sessions get can't be changed
+		IPrincipal ro = new ImmutablePrincipal(p);
+		assertEquals("user1", ro.getName());
+		assertThrows(UnsupportedOperationException.class, () -> ro.setCredentials(new byte[0]));
+		assertThrows(UnsupportedOperationException.class, () -> ro.getPermissions().clear());
 	}
 
 	private void validateAcl(String serverName) {

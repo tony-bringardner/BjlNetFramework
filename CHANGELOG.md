@@ -8,6 +8,12 @@ incompatible; see Changed for behaviour to be aware of.
 
 ### Added
 
+- **Access control without an `IServer`.** `IAccessControlList.initialize(String serverName)` sets up
+  an access control list for a server known only by name (for example a non-blocking
+  server). `FileBasedAcl` and `PropertyAuthenticator` implement it and their
+  `initialize(IServer)` calls it; the interface's default throws `UnsupportedOperationException`, so
+  existing implementations still compile. The read only principal `Server.authenticate()` returns is
+  now the public class `ImmutablePrincipal`, so other servers can hand out the same kind.
 - **Session tasks and a scheduler (BJL-59).** `Server.startTask(session, thread)` starts a thread that
   belongs to a session: it runs on the same kind of thread as sessions, gets a name, keeps the idle
   check from closing its session, and is stopped when the session ends or the server stops

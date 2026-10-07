@@ -208,7 +208,12 @@ public class FileBasedAcl extends BaseObject implements IAccessControlList {
 
 	@Override
 	public void initialize(IServer server) throws IOException {
-		setPropertyPrefix(server.getName());
+		initialize(server.getName());
+	}
+
+	@Override
+	public void initialize(String serverName) throws IOException {
+		setPropertyPrefix(serverName);
 
 		String path = getProperty(PROP_FILE_NAME);
 		if( path == null ) {
